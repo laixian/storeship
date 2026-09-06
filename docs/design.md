@@ -128,10 +128,13 @@ tmp；`card.ts` 负责「带洞的前景」（四块背板由工具生成，模�
 （版本号、发布日、文案、是否撤回、裁剪框选哪一段），agent 起草、人拍板。
 每条命令 `--json`，skill 只读结构、不刮屏幕。
 
-## 6. 拆成独立仓库前的门槛
+## 6. 拆仓库：2026-09-07 已拆（`git subtree split`，四次提交的历史保留）
 
-1. 一次真实发版用 `storeship release` 走完（写路径的真机验证）。
-2. 定名字和许可证；`package.json` 的 `repository` 现在是 `TODO`。
-3. `pnpm build` 出 `dist/`，`npm pack` 装到一个空目录里跑 `doctor` / `version status`（验 #2 那条）。
-4. README 里的例子全部用假 id 重跑一遍（现在的例子 id 是 od-mobile 的真值改过的）。
-5. od-mobile 改成从 npm 装（`devDependencies: storeship@^0.1`），`pnpm storeship` 脚本改回 bin。
+| 门 | 状态 |
+|---|---|
+| 名字 / 许可证 | storeship / MIT，`repository` 指向 github.com/laixian/storeship |
+| `npm pack` 装进空目录、从 od-mobile 目录跑 | `version status` / `skill list` / `shots check` 都通过 dist 跑通（决策 #2 成立） |
+| README 例子用假 id | 已换 |
+| od-mobile 引用方式 | 暂时 `devDependencies: "storeship": "link:../storeship"`（要求旁边仓库已 `pnpm build`）；**发到 npm 后改成 `^0.1.0`** |
+| 一次真实发版用 `storeship release` 走完 | **未做**——写路径仍只有假 fetch 单测，这是发 0.1.0 之前最后一道门 |
+| GitHub 仓库 / npm publish | 未做，等 Ken 拍板 |
