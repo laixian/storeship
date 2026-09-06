@@ -42,14 +42,14 @@ The key id, issuer id, app id and team id are identifiers, not secrets; they go 
 
 ```json
 {
-  "app": { "id": "6802359142", "bundleId": "com.example.app" },
+  "app": { "id": "1234567890", "bundleId": "com.example.app" },
   "asc": { "keyId": "ABC123DEF4", "issuerId": "00000000-0000-0000-0000-000000000000", "teamId": "TEAM123456" },
   "locales": ["en-US", "zh-Hans"],
   "ios": { "projectDir": "apps/mobile" },
   "listing": { "file": "store/listing.md" },
   "whatsNew": { "dir": "store/whats-new" },
   "release": { "scheduledTime": "08:00:00-07:00" },
-  "products": { "yearly": "6805831598" }
+  "products": { "yearly": "1234567891" }
 }
 ```
 

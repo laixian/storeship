@@ -32,7 +32,8 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/sim/sim-hid.swift dist/sim/ && cp src/reel/*.swift dist/reel/ && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
-    "prepublishOnly": "pnpm build && pnpm test"
+    "prepublishOnly": "pnpm build && pnpm test",
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -40,6 +41,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ken2021/storeship"
-  }
+    "url": "https://github.com/laixian/storeship"
+  },
+  "homepage": "https://github.com/laixian/storeship#readme",
+  "bugs": "https://github.com/laixian/storeship/issues",
+  "author": "Ken"
 }
