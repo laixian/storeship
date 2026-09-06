@@ -87,6 +87,7 @@ Every command takes `--json` for machine-readable output (progress still goes to
 | `shots check\|render\|upload\|seed` | App Store screenshots (see below) |
 | `sim …` | simulator driver (see below) |
 | `preview record\|stop\|cut\|check\|upload` | App Preview video (see below) |
+| `reel card\|pts\|make` | vertical social video (see below) |
 | `skill list\|install` | agent skills (see below) |
 
 ## Store listing as code
@@ -223,9 +224,22 @@ Why the intermediate step: `simctl` recordings write a frame only when something
 
 Needs ffmpeg: `~/.local/opt/ffmpeg/ffmpeg` (a static build), `ffmpeg` in the config, `STORESHIP_FFMPEG`, or PATH.
 
-## Roadmap
+## Reel (vertical social video)
 
-- `reel`: vertical social video (card overlay + offline audio aligned by frame timestamps).
+A simulator recording inside a designed card, for Xiaohongshu / Reels / Shorts.
+
+```bash
+storeship reel card /tmp/card.png                 # the card layer alone (PNG with a transparent hole)
+storeship reel pts take.mov                       # frame timestamps; steady runs → where audio t=0 belongs
+storeship reel make take.mov out.mp4 --start 3.4 --duration 20 [--audio song.wav --audio-t0 3.43]
+```
+
+Config `reel.content` points at a module/JSON exporting `{ canvas, band, crop?, rotate?, fps?, copy }`; `reel.template` optionally replaces the built-in card (label, two-line title with `<em>` accents, glow ring, bullet points, brand line — all from `copy`, colours from `copy.colors`).
+
+- **The card is a foreground with a hole.** In a frame produced by `AVVideoCompositionCoreAnimationTool` the area outside the video is black, not transparent, so a background would be covered. The tool builds the opaque panes around the band; a template must not paint the card's background.
+- **`band.h` is derived**, not chosen: the recording, rotated and cropped, scaled to `band.w`, has one height. `reel make` refuses a mismatch and prints the right number.
+- **Audio is aligned by frame timestamps.** `simctl` recordings carry no app audio. If the app redraws on a beat, `reel pts` finds the steady cadence and its first frame; render the audio offline and pass that time as `--audio-t0` (recording timeline). Not the frame where play was pressed.
+- Needs Xcode's toolchain (the compositor is Swift, compiled once and cached) and Chrome for the card.
 
 ## License
 

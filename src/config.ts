@@ -75,6 +75,8 @@ export type RawConfig = {
   chrome?: string
   /** ffmpeg binary for `preview` / `reel`. */
   ffmpeg?: string
+  /** Vertical social video. */
+  reel?: { content?: string; template?: string }
 }
 
 export type Config = {
@@ -110,6 +112,7 @@ export type Config = {
   sim: { idb?: string; profile?: string }
   chrome?: string
   ffmpeg?: string
+  reel: { content?: string; template?: string }
 }
 
 export const CONFIG_NAMES = [
@@ -192,6 +195,7 @@ export function resolveConfig(
     sim: { idb: rel(root, raw.sim?.idb), profile: raw.sim?.profile },
     chrome: raw.chrome,
     ffmpeg: rel(root, raw.ffmpeg),
+    reel: { content: rel(root, raw.reel?.content), template: rel(root, raw.reel?.template) },
   }
 }
 

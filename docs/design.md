@@ -109,10 +109,18 @@ ffmpeg 不随包：`~/.local/opt/ffmpeg/ffmpeg`（约定位置，同 idb 的做�
 （29.77s / 893 帧）和 iPad 成片（1200×1600）也通过；原始 `.mov` 被判出尺寸不对。
 **`record` / `stop` / `upload` 没有真跑**（没有要录的内容、不往线上传）。
 
-### 5.3 `reel`：竖版社交视频
+### 5.3 `reel`：竖版社交视频 —— **2026-09-07 已落地**
 
-`tools/reel/` 的 AVFoundation 合成器（旋转矩阵、y 轴翻转、裁剪顺序、BAND 对齐校验）通用；
-卡片文案与配色是项目的 → 模板 + 内容文件，同 5.1。音频按帧时间戳对齐、不能靠耳朵，进 skill。
+`src/reel/*`：`reel.swift` 参数化（canvas / band / crop / fps / rotate 全走参数），`swiftc` 编译一次缓存在
+tmp；`card.ts` 负责「带洞的前景」（四块背板由工具生成，模板不许给卡片上底色，PNG 无 alpha 直接报错）；
+`pts.swift` + `steadyRuns()` 自动找等间隔连续帧（= 按拍重画的走针），把 t0 和推算 BPM 打出来；
+默认模板就是 od-mobile 那套卡片，文案配色从 `copy` 来。**BAND 只剩一份**（内容文件），
+卡片和合成器读同一个。
+
+**验收**：`reel card` 出 1080×1440 RGBA；`reel pts` 在 8 月的 seg3 录屏上找出 0.544s 的稳定节奏
+（≈110 BPM，正是当时那首布鲁斯的速度）；`reel make` 用 Pro Max 录屏（1320×2868）对 513 的 band.h
+当场报「应为 508」；用 508 的临时内容真跑一遍导出成功（1080×1440 mp4）。**没验音频那一支**
+（没有对应的离线伴奏 wav）。
 
 ### 5.4 skill 的分工原则
 

@@ -22,3 +22,8 @@ export { findFfmpeg, probe, parseProbe, parseDuration } from './preview/ffmpeg.t
 export { cutPreview, parseSegment, xfadeChain } from './preview/cut.ts'
 export { checkPreview, defaultSize, PREVIEW_SIZES } from './preview/specs.ts'
 export { startRecording, stopRecording } from './preview/record.ts'
+export * from './reel/types.ts'
+export { panes, cardHtml, renderCard } from './reel/card.ts'
+export { defaultReelTemplate } from './reel/defaultTemplate.ts'
+export { makeReel, framePts, steadyRuns, swiftTool } from './reel/run.ts'
+export { loadReel } from './reel/load.ts'
