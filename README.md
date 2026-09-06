@@ -86,6 +86,7 @@ Every command takes `--json` for machine-readable output (progress still goes to
 | `analytics request\|list\|fetch\|sales` | Analytics Reports API and daily sales |
 | `shots check\|render\|upload\|seed` | App Store screenshots (see below) |
 | `sim …` | simulator driver (see below) |
+| `preview record\|stop\|cut\|check\|upload` | App Preview video (see below) |
 | `skill list\|install` | agent skills (see below) |
 
 ## Store listing as code
@@ -206,9 +207,24 @@ python3 -m venv ~/.local/opt/idb/venv && ~/.local/opt/idb/venv/bin/pip install f
 
 Without idb the driver synthesizes mouse events (CGEvent) from the simulator window position; that needs Accessibility permission for your terminal and the target window raised.
 
+## App Preview video
+
+```bash
+storeship preview record seg1.mov --device iphone69   # simctl recordVideo; stop cleanly with…
+storeship preview stop                                # …SIGINT — never kill the process (leaks the session; only a reboot fixes it)
+storeship preview cut out.mp4 seg1.mov:0:8:p seg2.mov:1:7 seg3.mov:1:7 --device iphone69 [--music song.wav]
+storeship preview check out.mp4 --device iphone69     # size / 15–30 s / ≤30 fps / frame count
+storeship preview upload 1.4.0 out.mp4 --device iphone69 --locale en-US [--replace]
+```
+
+Segments are `<file>:<start>:<duration>[:p]`; `:p` marks a portrait page (letterboxed instead of rotated — a landscape app recorded by a portrait simulator comes out sideways). The canvas is the App Preview size for the device (1920×886 for iPhone, 1200×1600 for iPad; `--portrait` or `--size WxH` to override). Each segment is first rendered to a fixed-length constant-frame-rate part, then crossfaded, then faded in/out, with optional music faded under it.
+
+Why the intermediate step: `simctl` recordings write a frame only when something changes. Crossfading them directly breaks the stream at the seam — the film has the right duration and half the frames — and `-t` on such a file often yields less than asked, so the crossfade offsets come from the durations actually produced. `preview check` flags the frame-count symptom on any file.
+
+Needs ffmpeg: `~/.local/opt/ffmpeg/ffmpeg` (a static build), `ffmpeg` in the config, `STORESHIP_FFMPEG`, or PATH.
+
 ## Roadmap
 
-- `preview`: cut a preview video from simulator recordings (VFR-aware; `xfade` on raw `simctl` recordings drops half the frames).
 - `reel`: vertical social video (card overlay + offline audio aligned by frame timestamps).
 
 ## License

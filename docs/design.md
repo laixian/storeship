@@ -95,11 +95,19 @@ a11y 树定位、`ltap` 横屏换算、状态栏 override）。**项目**给内�
 
 ⚠️ 没做的：`sim` 的 CGEvent 退路只是照 `sim.py` 搬的，这台机器有 idb，**退路没重新验过**。
 
-### 5.2 `preview`：App Store 预览视频
+### 5.2 `preview`：App Store 预览视频 —— **2026-09-07 已落地**
 
-`tools/preview/cut.sh` 的核心是三条 VFR 教训（模拟器录像不能直接 xfade、offset 用实际时长、
-不能 `trim` 掉第 0 帧），值得带；`ffmpeg` 走 `STORESHIP_FFMPEG` 或 PATH。
-录制那半（`simctl io recordVideo`、`pkill -INT` 才能停、状态栏 override）是流程，进 skill。
+`src/preview/*`：`cut.sh` 的三条 VFR 教训进了 `cut.ts`（每段先渲定长 CFR 中间片；xfade 偏移按
+**实际产出**时长算——纯函数 `xfadeChain`；不裁头）；`record.ts` 用 SIGINT 停、认得
+「Host recording is already in progress」并提示重启模拟器；`specs.ts` 是 App Preview 的尺寸表
+（按 preview type）+ 15–30s + ≤30fps + **帧数与时长不匹配 = VFR 接缝**的判据；
+`preview upload` 按 locale × 设备找/建槽位。`ui.py` 的 a11y 定位 2026-09-07 已并进 `sim find/ls`。
+ffmpeg 不随包：`~/.local/opt/ffmpeg/ffmpeg`（约定位置，同 idb 的做法）/ 配置 / 环境变量 / PATH。
+
+**验收**：用 8 月的四段原始录屏真跑 `cut`：四段请求 8/7/7/6.5s，VFR 源实际给 8.00/5.93/5.93/5.47s，
+成片 23.83s、715 帧（= 23.83 × 30，CFR 成立）、1920×886，`check` 通过；已提交的中文成片
+（29.77s / 893 帧）和 iPad 成片（1200×1600）也通过；原始 `.mov` 被判出尺寸不对。
+**`record` / `stop` / `upload` 没有真跑**（没有要录的内容、不往线上传）。
 
 ### 5.3 `reel`：竖版社交视频
 

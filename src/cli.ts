@@ -20,6 +20,7 @@ import { mediaCommand } from './commands/media.ts'
 import { appsCommand, deviceCommand, skillCommand } from './commands/misc.ts'
 import { offerCommand } from './commands/offer.ts'
 import { releaseCommand } from './commands/release.ts'
+import { previewCommand } from './commands/preview.ts'
 import { shipCommand, uploadCommand } from './commands/ship.ts'
 import { shotsCommand } from './commands/shots.ts'
 import { simCommand } from './commands/sim.ts'
@@ -43,6 +44,7 @@ const COMMANDS: Command[] = [
   appsCommand,
   analyticsCommand,
   shotsCommand,
+  previewCommand,
   simCommand,
   skillCommand,
 ]

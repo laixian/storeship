@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { type Command } from '../ctx.ts'
 import { capture, which } from '../proc.ts'
 import { resolveProject } from '../ios/xcode.ts'
+import { FFMPEG_HINT, findFfmpeg } from '../preview/ffmpeg.ts'
 import { findChrome } from '../shots/render.ts'
 import { findIdb } from '../sim/sim.ts'
 
@@ -58,7 +59,13 @@ export const doctorCommand: Command = {
     if (cfg.shots.content) add('shots content (optional)', existsSync(cfg.shots.content), cfg.shots.content, 'set shots.content to the module exporting the shots')
     const idb = findIdb(cfg.sim.idb)
     add('idb (optional)', !!idb, idb?.bin ?? 'missing — `sim` falls back to CGEvent, which needs Accessibility permission', 'see README → Simulator driver for the install (brew does not work with full Xcode only)')
-    add('ffmpeg (optional)', !!which('ffmpeg') || !!process.env.STORESHIP_FFMPEG, which('ffmpeg') ?? process.env.STORESHIP_FFMPEG ?? 'missing', 'needed only for `preview cut`')
+    let ffmpeg: string | undefined
+    try {
+      ffmpeg = findFfmpeg(cfg.ffmpeg)
+    } catch {
+      /* reported below */
+    }
+    add('ffmpeg (optional)', !!ffmpeg, ffmpeg ?? 'missing', `needed only for \`preview\` / \`reel\`; ${FFMPEG_HINT}`)
 
     ctx.out.emit(checks)
     for (const c of checks) ctx.out.log(`${c.ok ? '✓' : '✗'} ${c.name.padEnd(20)} ${c.detail}${!c.ok && c.fix ? `\n      → ${c.fix}` : ''}`)

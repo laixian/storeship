@@ -73,6 +73,8 @@ export type RawConfig = {
   }
   /** Chrome / Chromium binary for headless rendering. */
   chrome?: string
+  /** ffmpeg binary for `preview` / `reel`. */
+  ffmpeg?: string
 }
 
 export type Config = {
@@ -107,6 +109,7 @@ export type Config = {
   }
   sim: { idb?: string; profile?: string }
   chrome?: string
+  ffmpeg?: string
 }
 
 export const CONFIG_NAMES = [
@@ -188,6 +191,7 @@ export function resolveConfig(
     },
     sim: { idb: rel(root, raw.sim?.idb), profile: raw.sim?.profile },
     chrome: raw.chrome,
+    ffmpeg: rel(root, raw.ffmpeg),
   }
 }
 
