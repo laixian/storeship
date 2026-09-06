@@ -6,7 +6,7 @@ Ship an Expo / React Native iOS app to the App Store **from your Mac**, in one c
 npx storeship release 1.4.0 --date 2026-10-01
 ```
 
-**Docs**: [from zero to review](docs/walkthrough.md) · [command reference](docs/commands.md) · [configuration](docs/config.md) · [library use](docs/api.md) · **中文**: [README](docs/zh/README.md) · [从零到提审](docs/zh/walkthrough.md) · [命令参考](docs/zh/commands.md) · [配置参考](docs/zh/config.md)
+**Docs**: [from zero to review](https://github.com/laixian/storeship/blob/main/docs/walkthrough.md) · [command reference](https://github.com/laixian/storeship/blob/main/docs/commands.md) · [configuration](https://github.com/laixian/storeship/blob/main/docs/config.md) · [library use](https://github.com/laixian/storeship/blob/main/docs/api.md) · **中文**: [README](https://github.com/laixian/storeship/blob/main/docs/zh/README.md) · [从零到提审](https://github.com/laixian/storeship/blob/main/docs/zh/walkthrough.md) · [命令参考](https://github.com/laixian/storeship/blob/main/docs/zh/commands.md) · [配置参考](https://github.com/laixian/storeship/blob/main/docs/zh/config.md)
 
 That runs: preflight (did you forget `expo prebuild`?) → `xcodebuild archive` → export IPA → `altool` upload → create the App Store version (scheduled) → write What's New for every locale → wait for the build to finish processing and attach it → submit for review. Every step is idempotent; if it dies half-way, run it again.
 
@@ -59,7 +59,7 @@ Relative paths resolve from the config file, so commands work from any subdirect
 
 ## Commands
 
-Every command takes `--json` for machine-readable output (progress still goes to stderr). Every flag is in the [command reference](docs/commands.md) and in `storeship <command> --help`.
+Every command takes `--json` for machine-readable output (progress still goes to stderr). Every flag is in the [command reference](https://github.com/laixian/storeship/blob/main/docs/commands.md) and in `storeship <command> --help`.
 
 | Command | What it does |
 |---|---|
