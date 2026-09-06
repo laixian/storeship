@@ -84,6 +84,8 @@ Every command takes `--json` for machine-readable output (progress still goes to
 | `device add <name> <udid>` | register a device |
 | `apps` | apps in the account |
 | `analytics request\|list\|fetch\|sales` | Analytics Reports API and daily sales |
+| `shots check\|render\|upload\|seed` | App Store screenshots (see below) |
+| `sim …` | simulator driver (see below) |
 | `skill list\|install` | agent skills (see below) |
 
 ## Store listing as code
@@ -140,9 +142,72 @@ What's New lives in `<whatsNew.dir>/<version>/<locale>.txt`, or is passed with `
 
 `--json` on every command. `storeship skill install` copies Claude Code skills into `.claude/skills/`: the release runbook as a procedure, with the judgement calls (version number, whether to cancel, what to write) left to the human.
 
+## Screenshots
+
+Real simulator screenshots + a template + a content file → exact-size PNGs for every device × locale, validated, with a contact sheet, uploaded by display type.
+
+```bash
+storeship shots check                # every problem at once: numbering, titles, sources, crops
+storeship shots render --sheet       # PNGs into shots.out + a contact sheet per device × locale
+storeship shots upload 1.4.0         # into the right ASC set per device; only new files (--replace to wipe)
+storeship shots seed -- --locale en  # run your demo-data script (shots.seed), args passed through
+```
+
+Config:
+
+```json
+"shots": {
+  "src": "store/screenshots",          "out": "store/shots",
+  "content": "store/shots/content.ts", "template": "store/shots/template.ts",
+  "devices": ["iphone69", "ipad13"],   "localeTags": { "zh-Hans": "zh", "en-US": "en" },
+  "seed": "store/shots/seed.ts"
+}
+```
+
+Source files are named `<prefix>-<localeTag>-<n>-<slug>.png` (`iphone-en-1-home.png`; a second screen for the same frame: `1b-<slug>`). Built-in devices: `iphone69` (1320×2868, APP_IPHONE_67), `iphone67`, `iphone63`, `iphone65`, `iphone55`, `ipad13` (2064×2752, APP_IPAD_PRO_3GEN_129), `ipad129`, `ipad11`; the content file may add or override devices.
+
+**Content** — a module exporting `Shot[]` (or `{ shots, devices?, template? }`):
+
+```ts
+import type { Shot } from 'storeship'
+export default [
+  { n: 1, slug: 'home', sn: 'HOME', bg: '#2FE9DF',
+    title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] },
+    cards: { iphone69: [{ x: 70, y: 820, w: 1400, h: 1185, sx: 0, sy: 0, sw: 1560 }] } },
+] satisfies Shot[]
+```
+
+`cards[device]` are rectangles on the canvas; `sx/sy/sw` is a rectangle on the source image (height follows the card's aspect), so a crop is always "zoom into a corner of the same screen". A missing device layout is an error, never a silently wrong picture.
+
+**Template** — optional; a module exporting `{ render(ctx) => html, titleLines?, titleMax?, snPattern? }`. `ctx` has `shot`, `locale`, `device`, `total`, `title` (the lines for this locale) and `cards` (each with a data-URI `img` and its native size). The built-in template is deliberately plain.
+
+The checker refuses: wrong numbering, missing or wrong-count title lines, missing or wrong-size sources, crops out of bounds, cards bleeding on both sides (no visible corner → reads as a colour band), and layouts missing for a device. Every failure on this path is otherwise silent.
+
+## Simulator driver
+
+```bash
+storeship sim which                       # idb or CGEvent fallback, target simulator
+storeship sim statusbar                   # 9:41, full battery, full signal
+storeship sim find "Play"                 # tap by accessibility label (idb)
+storeship sim tap 220 284                 # device points, portrait
+storeship sim ltap 330 1121               # pixels on the rotated screenshot of a landscape page
+storeship sim drag 200 800 200 300
+storeship sim shot out.png [270]          # 270 rotates a landscape capture upright
+storeship sim ls [pattern]                # accessibility tree
+```
+
+`--profile <deviceId>` picks the simulator by the device table (`sim.profile` in config); `--udid` overrides. **idb** (`idb ui tap`) takes device points and needs no window geometry or Accessibility grant. `brew install idb-companion` fails on a machine with full Xcode only; install the prebuilt companion + pip:
+
+```bash
+curl -L -o /tmp/idbc.tar.gz https://github.com/facebook/idb/releases/download/v1.5.0.b3/idb-companion.macos-arm64.tar.gz
+mkdir -p ~/.local/opt/idb && tar -xzf /tmp/idbc.tar.gz -C ~/.local/opt/idb
+python3 -m venv ~/.local/opt/idb/venv && ~/.local/opt/idb/venv/bin/pip install fb-idb
+```
+
+Without idb the driver synthesizes mouse events (CGEvent) from the simulator window position; that needs Accessibility permission for your terminal and the target window raised.
+
 ## Roadmap
 
-- `shots`: App Store screenshot compositor — real simulator screenshots + an HTML template + a content file → exact-size PNGs for every device × locale, with a checker (every failure on this path is silent) and a contact sheet.
 - `preview`: cut a preview video from simulator recordings (VFR-aware; `xfade` on raw `simctl` recordings drops half the frames).
 - `reel`: vertical social video (card overlay + offline audio aligned by frame timestamps).
 

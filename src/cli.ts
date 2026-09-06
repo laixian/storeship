@@ -21,6 +21,8 @@ import { appsCommand, deviceCommand, skillCommand } from './commands/misc.ts'
 import { offerCommand } from './commands/offer.ts'
 import { releaseCommand } from './commands/release.ts'
 import { shipCommand, uploadCommand } from './commands/ship.ts'
+import { shotsCommand } from './commands/shots.ts'
+import { simCommand } from './commands/sim.ts'
 import { buildsCommand, versionCommand } from './commands/version.ts'
 
 export const NAME = 'storeship'
@@ -40,6 +42,8 @@ const COMMANDS: Command[] = [
   deviceCommand,
   appsCommand,
   analyticsCommand,
+  shotsCommand,
+  simCommand,
   skillCommand,
 ]
 

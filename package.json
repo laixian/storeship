@@ -29,7 +29,7 @@
     "screenshots"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/sim/sim-hid.swift dist/sim/ && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
     "prepublishOnly": "pnpm build && pnpm test"

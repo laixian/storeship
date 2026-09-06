@@ -46,6 +46,33 @@ export type RawConfig = {
   }
   /** Subscription aliases → ASC subscription ids, for `offer` commands. */
   products?: Record<string, string>
+  /** Store screenshot compositor. */
+  shots?: {
+    /** Raw simulator screenshots: `<prefix>-<localeTag>-<n>-<slug>.png`. */
+    src?: string
+    /** Rendered, ASC-ready PNGs. */
+    out?: string
+    /** Module exporting the shots (and optionally devices / template). */
+    content?: string
+    /** Module exporting the template; default: the built-in one. */
+    template?: string
+    /** Device ids to render; default: every device the content lays out. */
+    devices?: string[]
+    /** Locales to render; default: the top-level `locales`. */
+    locales?: string[]
+    /** Locale code → short tag used in filenames, e.g. {"zh-Hans": "zh"}. */
+    localeTags?: Record<string, string>
+    /** Project script that plants demo data in the simulator; run by `shots seed` with its args passed through. */
+    seed?: string
+  }
+  sim?: {
+    /** Path to the idb binary; default: ~/.local/opt/idb/venv/bin/idb, then PATH. */
+    idb?: string
+    /** Default device id (from the device table) for `sim` commands. */
+    profile?: string
+  }
+  /** Chrome / Chromium binary for headless rendering. */
+  chrome?: string
 }
 
 export type Config = {
@@ -68,6 +95,18 @@ export type Config = {
   whatsNew: { dir: string }
   release: { scheduledTime: string }
   products: Record<string, string>
+  shots: {
+    src?: string
+    out?: string
+    content?: string
+    template?: string
+    devices?: string[]
+    locales?: string[]
+    localeTags?: Record<string, string>
+    seed?: string
+  }
+  sim: { idb?: string; profile?: string }
+  chrome?: string
 }
 
 export const CONFIG_NAMES = [
@@ -137,6 +176,18 @@ export function resolveConfig(
     whatsNew: { dir: rel(root, raw.whatsNew?.dir) ?? resolve(root, 'whats-new') },
     release: { scheduledTime: raw.release?.scheduledTime ?? '00:00:00Z' },
     products: raw.products ?? {},
+    shots: {
+      src: rel(root, raw.shots?.src),
+      out: rel(root, raw.shots?.out),
+      content: rel(root, raw.shots?.content),
+      template: rel(root, raw.shots?.template),
+      devices: raw.shots?.devices,
+      locales: raw.shots?.locales,
+      localeTags: raw.shots?.localeTags,
+      seed: rel(root, raw.shots?.seed),
+    },
+    sim: { idb: rel(root, raw.sim?.idb), profile: raw.sim?.profile },
+    chrome: raw.chrome,
   }
 }
 

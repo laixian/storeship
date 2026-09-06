@@ -2,6 +2,8 @@ import { existsSync, statSync } from 'node:fs'
 import { type Command } from '../ctx.ts'
 import { capture, which } from '../proc.ts'
 import { resolveProject } from '../ios/xcode.ts'
+import { findChrome } from '../shots/render.ts'
+import { findIdb } from '../sim/sim.ts'
 
 type Check = { name: string; ok: boolean; detail: string; fix?: string }
 
@@ -46,7 +48,16 @@ export const doctorCommand: Command = {
       }
     }
     // Optional tooling for the media side
-    add('Chrome (optional)', existsSync('/Applications/Google Chrome.app'), '/Applications/Google Chrome.app', 'needed only for `shots` rendering')
+    let chrome: string | undefined
+    try {
+      chrome = findChrome(cfg.chrome)
+    } catch {
+      /* reported below */
+    }
+    add('Chrome (optional)', !!chrome, chrome ?? 'missing', 'needed only for `shots render`; set chrome in the config or STORESHIP_CHROME')
+    if (cfg.shots.content) add('shots content (optional)', existsSync(cfg.shots.content), cfg.shots.content, 'set shots.content to the module exporting the shots')
+    const idb = findIdb(cfg.sim.idb)
+    add('idb (optional)', !!idb, idb?.bin ?? 'missing — `sim` falls back to CGEvent, which needs Accessibility permission', 'see README → Simulator driver for the install (brew does not work with full Xcode only)')
     add('ffmpeg (optional)', !!which('ffmpeg') || !!process.env.STORESHIP_FFMPEG, which('ffmpeg') ?? process.env.STORESHIP_FFMPEG ?? 'missing', 'needed only for `preview cut`')
 
     ctx.out.emit(checks)

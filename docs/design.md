@@ -78,18 +78,22 @@ locale 对 `zh-Hans`/`en-US` 写死 → `locales` 数组。
 
 ## 5. 后续阶段（Ken 2026-09-07 定的范围：发布链打底，截图 / 预览视频 / 小红书视频都要，配 agent skill）
 
-### 5.1 `shots`：商店截图合成
+### 5.1 `shots`：商店截图合成 —— **2026-09-07 已落地**
 
-od-mobile 的 `tools/store-shot/` 已经是「校验 + HTML 渲成精确像素 + 联系表」的流水线，
-只是设计层（颜色、装饰、七张图的裁剪坐标）全是该项目的。抽法：
+分工照着定的做了：**工具**（`src/shots/*`、`src/sim/*`）管设备档表（含 ASC display type 和
+模拟器名 / pt / px）、检查器（纯函数，注入 fs，所有问题一次报完）、Chrome 渲染、联系表、
+`shots upload <版本>` 按 display type 找/建槽位只传缺的文件、`sim` 驱动（idb 优先、CGEvent 退路、
+a11y 树定位、`ltap` 横屏换算、状态栏 override）。**项目**给内容文件（`Shot[]`，标题按 ASC locale
+码分）和模板模块（`{ render(ctx), titleLines, titleMax, snPattern }`）；随包一个中性默认模板。
+`shots.localeTags` 让文件名里继续用 `zh` / `en` 短标签，不用改已有截图的名字。
+`shots.seed` 是项目脚本的 hook，参数原样透传。
 
-- **工具提供**：设备档表（尺寸 / 缩放单位）、源截图命名约定与尺寸校验、Chrome headless 渲染、
-  `--sheet` 联系表、「所有问题一次报完」的检查器（这条路上的错误全是静默的：裁剪越界只漏一条底色）。
-- **用户提供**：`shots.config` 指向一个**模板模块**（导出 `shotHtml(shot, locale, device, images) → html`）
-  和一个**内容文件**（每张图的 slug / 标题 / 每设备的裁剪框）。随包带一个中性默认模板，开箱能出图。
-- **模拟器驱动**（`sim.py` 的 idb / CGEvent 两路、`ui.py` 的 a11y 定位）值得一起带：`storeship sim tap|drag|shot|ls`。
-  种演示数据（`seed-sim.ts`）是项目的，做成 hook：`shots.seed: "<脚本路径>"`。
-- 设计约束（unit 只缩字号和边距、版式按设备重排、走针跨整套推进、2.3.3 合规边界）进 skill，不进代码。
+**验收**：od-mobile 的 `design.ts` 只改签名搬成模板、`content.ts` 只改标题的键，用新工具重渲
+28 张，与 2026-08 提交的产物**逐字节相同**（Chrome 同机渲染是确定的，HTML 一字未变）。
+设计约束（unit 只缩字号、版式按设备重排、走针跨整套推进、2.3.3、写标题三条）在
+`skills/storeship-shots/SKILL.md`，不在代码里。
+
+⚠️ 没做的：`sim` 的 CGEvent 退路只是照 `sim.py` 搬的，这台机器有 idb，**退路没重新验过**。
 
 ### 5.2 `preview`：App Store 预览视频
 
