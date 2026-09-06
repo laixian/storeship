@@ -28,6 +28,13 @@ export const reelCommand: Command = {
       name: 'make',
       summary: 'recording (+ audio) → mp4; renders the card fresh each time',
       usage: 'reel make <recording.mov> <out.mp4> [--start s] [--duration s] [--audio f.wav --audio-t0 s] [--card card.png]',
+      flags: {
+        start: 'seconds into the recording to start; default 0',
+        duration: 'seconds to keep; default: to the end',
+        audio: 'audio file to lay under the picture',
+        'audio-t0': "where the audio's t=0 falls on the recording's timeline (seconds); from `reel pts`",
+        card: 'use this card PNG instead of rendering one',
+      },
       run: async (ctx) => {
         const recording = ctx.args.at(0, 'recording.mov')
         const out = ctx.args.at(1, 'out.mp4')
@@ -59,6 +66,7 @@ export const reelCommand: Command = {
       name: 'pts',
       summary: 'frame timestamps of a recording, and the steady-cadence runs (the first frame of one is where audio t=0 belongs)',
       usage: 'reel pts <recording.mov> [--all]',
+      flags: { all: 'print every frame, not only the steady runs' },
       booleans: ['all'],
       run: async (ctx) => {
         const file = ctx.args.at(0, 'recording.mov')

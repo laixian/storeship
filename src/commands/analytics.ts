@@ -11,6 +11,7 @@ export const analyticsCommand: Command = {
       name: 'request',
       summary: 'ask Apple for a report snapshot (data arrives the next day)',
       usage: 'analytics request [--access ONE_TIME_SNAPSHOT|ONGOING]',
+      flags: { access: 'ONE_TIME_SNAPSHOT (default) or ONGOING' },
       run: async (ctx) => {
         const r = await requestReport(ctx.client(), ctx.appId(), ctx.args.str('access'))
         ctx.out.emit(r)
@@ -34,6 +35,7 @@ export const analyticsCommand: Command = {
       name: 'fetch',
       summary: 'download the newest instance of a report as a table',
       usage: 'analytics fetch "<report name>" [--granularity DAILY|WEEKLY|MONTHLY]',
+      flags: { granularity: 'DAILY (default), WEEKLY or MONTHLY' },
       run: async (ctx) => {
         const r = await fetchReport(ctx.client(), ctx.appId(), ctx.args.at(0, 'report name'), ctx.args.str('granularity'))
         ctx.out.emit(r)

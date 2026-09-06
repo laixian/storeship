@@ -18,6 +18,11 @@ export const shipCommand: Command = {
   name: 'ship',
   summary: 'archive → export IPA → upload to App Store Connect (the version number is yours to set beforehand)',
   usage: 'ship [--skip-upload] [--force] [--quiet]',
+  flags: {
+    'skip-upload': 'archive and export only; print the IPA path for `upload`',
+    force: 'build even when app.config and ios/ disagree on the version (i.e. prebuild was not run)',
+    quiet: 'do not stream xcodebuild / altool output',
+  },
   booleans: ['skip-upload', 'force', 'quiet'],
   run: async (ctx) => {
     const quiet = ctx.args.bool('quiet')
@@ -47,7 +52,8 @@ export const shipCommand: Command = {
 export const uploadCommand: Command = {
   name: 'upload',
   summary: 'upload an already exported IPA with altool',
-  usage: 'upload <file.ipa>',
+  usage: 'upload <file.ipa> [--quiet]',
+  flags: { quiet: 'do not stream altool output' },
   booleans: ['quiet'],
   run: async (ctx) => {
     const ipa = ctx.args.at(0, 'file.ipa')

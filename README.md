@@ -6,6 +6,8 @@ Ship an Expo / React Native iOS app to the App Store **from your Mac**, in one c
 npx storeship release 1.4.0 --date 2026-10-01
 ```
 
+**Docs**: [from zero to review](docs/walkthrough.md) · [command reference](docs/commands.md) · [configuration](docs/config.md) · [library use](docs/api.md) · **中文**: [README](docs/zh/README.md) · [从零到提审](docs/zh/walkthrough.md) · [命令参考](docs/zh/commands.md) · [配置参考](docs/zh/config.md)
+
 That runs: preflight (did you forget `expo prebuild`?) → `xcodebuild archive` → export IPA → `altool` upload → create the App Store version (scheduled) → write What's New for every locale → wait for the build to finish processing and attach it → submit for review. Every step is idempotent; if it dies half-way, run it again.
 
 ## Why another tool
@@ -57,7 +59,7 @@ Relative paths resolve from the config file, so commands work from any subdirect
 
 ## Commands
 
-Every command takes `--json` for machine-readable output (progress still goes to stderr).
+Every command takes `--json` for machine-readable output (progress still goes to stderr). Every flag is in the [command reference](docs/commands.md) and in `storeship <command> --help`.
 
 | Command | What it does |
 |---|---|

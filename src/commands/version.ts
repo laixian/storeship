@@ -39,6 +39,7 @@ export const versionCommand: Command = {
       name: 'create',
       summary: 'create a version record; with a date it becomes a scheduled release',
       usage: 'version create <version> [--date YYYY-MM-DD]',
+      flags: { date: 'schedule the release for this day (at release.scheduledTime from the config); without it the release is manual after approval' },
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
         const r = await createVersion(ctx.client(), ctx.appId(), version, { date: ctx.args.str('date'), scheduledTime: ctx.cfg.release.scheduledTime })
@@ -50,6 +51,11 @@ export const versionCommand: Command = {
       name: 'whatsnew',
       summary: "write What's New for every locale",
       usage: 'version whatsnew <version> [--dir DIR | --file <locale>=<path> …] [--dry-run]',
+      flags: {
+        dir: 'directory holding <locale>.txt per configured locale; default: <whatsNew.dir>/<version>',
+        file: 'one locale from one file, repeatable: --file en-US=notes/en.txt',
+        'dry-run': 'print what would be written and stop',
+      },
       booleans: ['dry-run'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
@@ -69,6 +75,7 @@ export const versionCommand: Command = {
       name: 'attach',
       summary: 'attach the newest build (must be VALID); --wait polls until it is',
       usage: 'version attach <version> [--wait] [--timeout MIN]',
+      flags: { wait: 'poll every 30 s until the newest build is VALID instead of failing', timeout: 'minutes to keep waiting with --wait; default 30' },
       booleans: ['wait'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
@@ -100,6 +107,7 @@ export const versionCommand: Command = {
       name: 'cancel',
       summary: 'withdraw the open review submission (one-way: the queue position is lost)',
       usage: 'version cancel --yes',
+      flags: { yes: 'required: cancelling is one-way and forfeits the review queue position' },
       booleans: ['yes'],
       run: async (ctx) => {
         if (!ctx.args.bool('yes'))

@@ -58,6 +58,7 @@ export const skillCommand: Command = {
       name: 'install',
       summary: 'copy the skills into a project (default .claude/skills)',
       usage: 'skill install [--to DIR] [--only NAME]',
+      flags: { to: 'target directory; default <config root>/.claude/skills', only: 'install one skill by name' },
       run: async (ctx) => {
         const to = resolve(ctx.args.str('to') ?? join(ctx.cfg.root, '.claude', 'skills'))
         const only = ctx.args.str('only')

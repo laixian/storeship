@@ -38,7 +38,10 @@ export class Ctx {
 export type Command = {
   name: string
   summary: string
+  /** Full usage line, positional args in <>, optional in []. */
   usage?: string
+  /** Flag name → what it does (with default). Shown by --help and in the generated docs. */
+  flags?: Record<string, string>
   booleans?: string[]
   run: (ctx: Ctx) => Promise<void>
   sub?: Command[]

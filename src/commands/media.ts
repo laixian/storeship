@@ -33,6 +33,7 @@ export const mediaCommand: Command = {
       name: 'upload',
       summary: 'upload files into a set (order = display order)',
       usage: 'media upload <screenshot|preview> <setId> <file> [file …]',
+      flags: {},
       run: async (ctx) => {
         const kind = kindOf(ctx.args.at(0, 'kind'))
         const setId = ctx.args.at(1, 'setId')

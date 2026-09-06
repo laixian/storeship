@@ -15,6 +15,14 @@ export const initCommand: Command = {
   name: 'init',
   summary: 'create storeship.config.json from the project and App Store Connect',
   usage: 'init [--project DIR] [--key-id ID --issuer-id ID [--key-path P]] [--bundle-id ID] [--force]',
+  flags: {
+    project: 'the Expo / iOS project directory, relative to the config root; default: the root itself',
+    'key-id': 'App Store Connect API key id (with --issuer-id the app id and locales are looked up)',
+    'issuer-id': 'App Store Connect issuer id',
+    'key-path': 'path to the .p8; default ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8',
+    'bundle-id': 'bundle id to look up; default: read from expo config',
+    force: 'overwrite an existing storeship.config.json',
+  },
   booleans: ['force'],
   run: async (ctx) => {
     const root = ctx.cfg.file ? ctx.cfg.root : process.cwd()

@@ -45,6 +45,7 @@ export const shotsCommand: Command = {
       name: 'check',
       summary: 'validate content, sources, crops for every device (all problems at once)',
       usage: 'shots check [--device a,b] [--locale x,y]',
+      flags: { device: 'comma list of device ids; default: every device the content lays out (or shots.devices)', locale: 'comma list of locales; default: the configured ones' },
       run: async (ctx) => {
         const s = await loadShots(ctx.cfg)
         const { devices, locales } = selection(ctx, s)
@@ -59,6 +60,7 @@ export const shotsCommand: Command = {
       name: 'render',
       summary: 'render the set (checks first); --sheet also writes a contact sheet per device × locale',
       usage: 'shots render [--device a,b] [--locale x,y] [--only 1,2] [--sheet]',
+      flags: { device: 'comma list of device ids', locale: 'comma list of locales', only: 'comma list of shot numbers to re-render', sheet: 'also write a contact sheet per device × locale into the temp dir' },
       booleans: ['sheet'],
       run: async (ctx) => {
         const s = await loadShots(ctx.cfg)
@@ -105,6 +107,7 @@ export const shotsCommand: Command = {
       name: 'upload',
       summary: 'push rendered screenshots into App Store Connect by display type (new files only unless --replace)',
       usage: 'shots upload <version> [--device a,b] [--locale x,y] [--replace] [--dry-run]',
+      flags: { device: 'comma list of device ids', locale: 'comma list of locales', replace: 'delete every screenshot in the set first', 'dry-run': 'show what would be uploaded, touch nothing' },
       booleans: ['replace', 'dry-run'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
@@ -133,6 +136,7 @@ export const shotsCommand: Command = {
       name: 'seed',
       summary: "run the project's demo-data script against the simulator (args passed through)",
       usage: 'shots seed [-- args…]',
+      flags: {},
       run: async (ctx) => {
         const script = ctx.cfg.shots.seed
         if (!script) throw new StoreshipError('shots.seed is not configured', 'point it at a script that plants demo data in the simulator sandbox')

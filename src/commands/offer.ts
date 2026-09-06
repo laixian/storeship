@@ -18,6 +18,8 @@ export const offerCommand: Command = {
     {
       name: 'list',
       summary: 'offers and code batches per configured product',
+      usage: 'offer list [--product ALIAS|ID]',
+      flags: { product: 'one product only (alias from config or a subscription id); default: every configured product' },
       run: async (ctx) => {
         const products = ctx.args.str('product') ? { [ctx.args.str('product')!]: productId(ctx) } : ctx.cfg.products
         if (!Object.keys(products).length) throw new StoreshipError('no products configured', 'set products in storeship.config.json or pass --product <subscriptionId>')
@@ -39,6 +41,17 @@ export const offerCommand: Command = {
       name: 'new',
       summary: 'create a free offer, issue one-time codes, download the CSV',
       usage: 'offer new --name NAME [--product P] [--duration ONE_YEAR] [--periods 1] [--codes 500] [--expires YYYY-MM-DD] [--eligibility NEW,EXISTING] [--renew] [--out FILE]',
+      flags: {
+        name: 'offer name; must be unique per product',
+        product: 'alias from config or a subscription id; default: the first configured product',
+        duration: 'free period unit: THREE_DAYS, ONE_WEEK, TWO_WEEKS, ONE_MONTH, TWO_MONTHS, THREE_MONTHS, SIX_MONTHS, ONE_YEAR; default ONE_YEAR',
+        periods: 'how many of those units; default 1',
+        codes: 'number of one-time codes to issue; default 500',
+        expires: 'last day the codes can be redeemed (YYYY-MM-DD, at most ~6 months out); default today + 175 days',
+        eligibility: 'comma list of NEW, EXISTING, EXPIRED; default NEW',
+        renew: 'let the subscription auto-renew at full price when the free period ends (Apple\'s default; this tool defaults to off and it cannot be changed afterwards)',
+        out: 'CSV path; default offer-codes-<name>.csv',
+      },
       booleans: ['renew'],
       run: async (ctx) => {
         const name = ctx.args.need('name')
@@ -62,6 +75,7 @@ export const offerCommand: Command = {
       name: 'csv',
       summary: 're-download a batch as CSV',
       usage: 'offer csv --batch ID [--out FILE]',
+      flags: { batch: 'batch id from `offer list`', out: 'CSV path; default offer-codes-<batch>.csv' },
       run: async (ctx) => {
         const batch = ctx.args.need('batch')
         const csv = await downloadCodes(ctx.client(), batch, ctx.args.str('out') ?? `offer-codes-${batch}.csv`)
@@ -73,6 +87,7 @@ export const offerCommand: Command = {
       name: 'off',
       summary: 'deactivate an offer and all its batches (codes stop working immediately)',
       usage: 'offer off --offer ID',
+      flags: { offer: 'offer id from `offer list`; all its batches are deactivated too and existing codes stop working' },
       run: async (ctx) => {
         const r = await deactivateOffer(ctx.client(), ctx.args.need('offer'))
         ctx.out.emit(r)

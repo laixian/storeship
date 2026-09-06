@@ -35,6 +35,7 @@ export const previewCommand: Command = {
       name: 'record',
       summary: 'start recording the booted simulator (stop with `preview stop`; never kill the process)',
       usage: 'preview record <out.mov> [--device id | --udid U]',
+      flags: { device: 'device id; its simulator name selects the booted simulator', udid: 'target a simulator by UDID instead' },
       run: async (ctx) => {
         const out = ctx.args.at(0, 'out.mov')
         const d = await deviceOf(ctx)
@@ -57,6 +58,14 @@ export const previewCommand: Command = {
       name: 'cut',
       summary: 'segments → CFR parts → crossfade → fades (+ music) at the preview size for the device',
       usage: 'preview cut <out.mp4> <file:start:dur[:p]>… [--device id | --size WxH] [--portrait] [--music f.wav] [--fps 30] [--xfade 0.5]',
+      flags: {
+        device: 'device id → the App Preview size for it (landscape for iPhone, portrait for iPad)',
+        size: 'explicit canvas WxH instead of --device',
+        portrait: 'with --device: use the portrait size',
+        music: 'audio file mixed under the film, faded in 1 s / out 1.5 s, cut to the film length',
+        fps: 'constant frame rate of the film; default 30',
+        xfade: 'crossfade seconds between segments; default 0.5',
+      },
       booleans: ['portrait'],
       run: async (ctx) => {
         const out = ctx.args.at(0, 'out.mp4')
@@ -92,6 +101,7 @@ export const previewCommand: Command = {
       name: 'check',
       summary: 'size / duration / fps / frame count against the App Preview spec',
       usage: 'preview check <file> [--device id]',
+      flags: { device: 'check against this device\'s preview type; without it any App Preview size passes' },
       run: async (ctx) => {
         const file = ctx.args.at(0, 'file')
         const d = await deviceOf(ctx)
@@ -108,6 +118,7 @@ export const previewCommand: Command = {
       name: 'upload',
       summary: 'upload a preview into the right slot for a locale × device (creates the slot if missing)',
       usage: 'preview upload <version> <file.mp4> --device id --locale L [--replace]',
+      flags: { device: 'device id → preview type / slot', locale: 'ASC locale code', replace: 'delete the previews already in the slot first' },
       booleans: ['replace'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')

@@ -29,7 +29,17 @@ async function confirm(ctx: Ctx, question: string): Promise<void> {
 export const releaseCommand: Command = {
   name: 'release',
   summary: 'the whole thing: ship + version create + whatsnew + attach --wait + submit',
-  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--no-ship] [--no-submit] [--yes] [--quiet]',
+  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]',
+  flags: {
+    date: 'scheduled release day; without it the release is manual after approval',
+    whatsnew: "directory with <locale>.txt What's New files; default <whatsNew.dir>/<version>, silently skipped when absent",
+    'no-ship': 'skip archive / export / upload (the build is already in App Store Connect)',
+    'no-submit': 'stop after attaching the build',
+    yes: 'skip the confirmation (required when not in a terminal)',
+    quiet: 'do not stream xcodebuild / altool output',
+    force: 'build even when app.config and ios/ disagree on the version',
+    timeout: 'minutes to wait for the build to become VALID; default 40',
+  },
   booleans: ['no-ship', 'no-submit', 'yes', 'quiet', 'force'],
   run: async (ctx) => {
     const version = ctx.args.at(0, 'version')

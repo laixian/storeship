@@ -14,6 +14,7 @@ import { StoreshipError } from './errors.ts'
 import { Out } from './out.ts'
 import { analyticsCommand } from './commands/analytics.ts'
 import { doctorCommand } from './commands/doctor.ts'
+import { docsCommand, registry } from './commands/docs.ts'
 import { initCommand } from './commands/init.ts'
 import { listingCommand } from './commands/listing.ts'
 import { mediaCommand } from './commands/media.ts'
@@ -49,6 +50,7 @@ const COMMANDS: Command[] = [
   reelCommand,
   simCommand,
   skillCommand,
+  docsCommand,
 ]
 
 const GLOBAL_BOOLEANS = ['json', 'help', 'version']
@@ -74,20 +76,47 @@ function usage(): string {
   ].join('\n')
 }
 
-function resolveCommand(argv: string[]): { cmd?: Command; rest: string[]; path: string[] } {
+function resolveCommand(argv: string[]): { cmd?: Command; rest: string[]; path: string[]; chain: Command[] } {
   let level: Command[] | undefined = COMMANDS
   let cmd: Command | undefined
   const path: string[] = []
+  const chain: Command[] = []
   let i = 0
   while (level && i < argv.length && !argv[i]!.startsWith('--')) {
     const next: Command | undefined = level.find((c) => c.name === argv[i])
     if (!next) break
     cmd = next
     path.push(next.name)
+    chain.push(next)
     level = next.sub
     i++
   }
-  return { cmd, rest: argv.slice(i), path }
+  return { cmd, rest: argv.slice(i), path, chain }
+}
+
+/** Flags of a command plus those inherited from its parents (e.g. sim's --profile). */
+export function allFlags(chain: Command[]): Record<string, string> {
+  return Object.assign({}, ...chain.map((c) => c.flags ?? {}), GLOBAL_FLAGS)
+}
+
+export const GLOBAL_FLAGS: Record<string, string> = {
+  json: 'machine-readable output on stdout; progress still goes to stderr',
+  config: 'config file; default: storeship.config.* found walking up from cwd',
+}
+
+registry.commands = COMMANDS
+registry.globalFlags = GLOBAL_FLAGS
+
+function commandHelp(cmd: Command, path: string[], chain: Command[]): string {
+  const lines = [`${NAME} ${cmd.usage ?? path.join(' ')}`, '', cmd.summary]
+  if (cmd.sub) lines.push('', help(cmd.sub, path.join(' ') + ' '))
+  const flags = allFlags(chain)
+  const names = Object.keys(flags)
+  if (names.length) {
+    const w = Math.max(...names.map((n) => n.length)) + 2
+    lines.push('', 'flags:', ...names.map((n) => `  --${n.padEnd(w)}${flags[n]}`))
+  }
+  return lines.join('\n')
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -96,10 +125,10 @@ export async function main(argv: string[]): Promise<void> {
     console.log(VERSION)
     return
   }
-  const { cmd, rest, path } = resolveCommand(argv)
+  const { cmd, rest, path, chain } = resolveCommand(argv)
   if (!cmd || pre.flags.has('help')) {
     if (cmd) {
-      console.log(`${NAME} ${cmd.usage ?? path.join(' ')}\n\n${cmd.summary}${cmd.sub ? `\n\n${help(cmd.sub, path.join(' ') + ' ')}` : ''}`)
+      console.log(commandHelp(cmd, path, chain))
       return
     }
     if (pre.positional.length) {
