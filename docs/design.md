@@ -1,0 +1,117 @@
+# storeship — 设计与决策（给接手者）
+
+**是什么**：从 od-mobile 仓库抽出来、准备开源的发布工具包。把一个 Expo / RN iOS App
+从本机送进 App Store：归档 / 导出 / 上传 / 版本记录 / What's New / 挂构建 / 提审，
+外加商店文案对账、截图与预览视频上传、订阅优惠码、数据报表。
+**名字 `storeship` 是占位**（npm 上空着），代码里只在 `package.json` 和 `cli.ts` 的
+`NAME` 常量出现；许可证暂填 MIT，两者都还没最终定。
+
+本文只记**代码里问不出来的东西**：为什么这样切、放弃了什么、下一步是什么。
+用法看 [README.md](../README.md)。
+
+## 1. 定位：不是「又一个 ASC API 封装」
+
+2026-09-07 调研：包一层 ASC API 的 CLI 已经有一排（Go 的 techinpark/app-store-connect-cli、
+Swift 的 tddworks/asc-cli、ittybittyapps/appstoreconnect-cli、Blackjacx/Assist），
+fastlane 覆盖同一条链但要整套 Ruby，EAS 走云端且收费、还会静默漏掉 `.gitignore` 里的文件。
+**空着的位置是**：Expo/RN 开发者在自己的 Mac 上、零依赖、一条命令走完整条链，
+且把踩过的坑做成护栏。差异化只有两件：
+
+1. **整条链而不是一层 API**：`release` 一个命令从 `xcodebuild archive` 到 Waiting for Review。
+2. **误导性报错的改写表**（`src/hints.ts`）：每一条都是这个仓库真的往错方向追过的。
+   加新条目的判据同样是「真的发生过、而且报错指错了方向」，不收集想象中的坑。
+
+## 2. 分层
+
+```
+src/cli.ts          解析 / 分发 / 把错误变成「message + hint」——只有这些
+src/commands/*      每个命令：读参数、调下面两层、打印。命令树在这里定义（含 booleans 表）
+src/asc/*           纯 ASC 操作，函数拿 client + id，不碰 process.argv / console → 可单测
+src/ios/xcode.ts    xcodebuild / altool / expo config / PlistBuddy
+src/config.ts       配置文件 + 环境变量 → 完全默认化的 Config（resolveConfig 是纯函数）
+src/hints.ts        报错文本 → 真因
+skills/*            给 agent 的操作规程（Claude Code SKILL.md 格式），`storeship skill install` 拷进项目
+```
+
+**`asc/*` 里的函数是库面**（`src/index.ts` 全部导出），命令层只是薄壳。
+这样 agent 和脚本可以不经过 CLI 直接调；测试也只测这一层加纯函数。
+
+## 3. 决策清单
+
+| # | 决定 | 理由 |
+|---|------|------|
+| 1 | **零运行时依赖，Node ≥ 22.18 直接跑 `.ts`** | 这是宣传点也是简化：没有构建、没有 Ruby、没有 Gemfile。代价见 #2 |
+| 2 | **发布到 npm 时必须编译出 `dist/`**（`pnpm build`，`bin` 指向 `dist/cli.js`） | Node **拒绝**剥离 `node_modules` 里 `.ts` 的类型（`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`）。在 pnpm workspace 里能直接跑是因为符号链接 realpath 落在 `node_modules` 外。所以仓库根的 `pnpm storeship` 是 `node packages/storeship/src/cli.ts`，不走 bin |
+| 3 | **`erasableSyntaxOnly: true`** | 类型剥离不做任何转换：构造函数参数属性、enum、namespace 在运行期直接是语法错误。tsc 抓到了四处，都是刚写的时候顺手写的参数属性 |
+| 4 | **配置：仓库里一份 JSON（或 `.ts`），密钥走 altool 的约定路径** | 标识符（app id / key id / issuer / team）不是密钥，入库；`.p8` 是唯一秘密，放 `~/.appstoreconnect/private_keys/`——altool 自己就在那儿找，用户只需记一个位置。环境变量覆盖是给「临时换一把 Admin key 拉报表」这种场景的 |
+| 5 | **相对路径一律从配置文件所在目录解析** | 旧脚本 `listing.ts` 的路径相对 cwd，只能在仓库根跑。命令必须从任何子目录都能用 |
+| 6 | **`listing.md` 标准格式**：`## <locale>` + `### <field>`，值为正文或单个围栏块 | 旧解析器绑死了一份特定文档的标题和全角括号。新格式：ASC 属性名当标题、agent 一眼能写；围栏块原样取值让描述里能放 `#` `---`。**缺的字段不动 ASC**，所以可以只管一部分字段 |
+| 7 | **`listing` 默认只 diff，`push` 才写** | 六格写错要重新排队审核。这是从旧 `meta --write` 继承的边界 |
+| 8 | **`ship` 预检 app.config vs `ios/Info.plist`** | 「忘了 prebuild」的症状是传上去一个旧版本号的包，白搭一个 buildNumber。`expo config --type public --json` 是版本号的真相源 |
+| 9 | **导出永远不传 `-authenticationKey*`，上传才传密钥** | 2026-08-30 那一整轮：带了会走云签名，App Manager 的 key 没权限，报错却说「没有发布证书」。`hints.ts` 认这句 |
+| 10 | **`ExportOptions.plist` 由配置生成**，`ios.exportOptions` 可追加 | 旧的是手写文件、teamID 硬编码。生成之后 teamID 只在一处 |
+| 11 | **`attach --wait` 内建轮询**，默认 30 分钟 | 取代 runbook 里 `until … | grep -q 已挂上` 那句 shell |
+| 12 | **`cancel` 必须 `--yes`**，不带只打印后果 | 撤回单向、排队位置作废、能否重提到那一刻才知道（ICP 那次）。不做 `--probe`：submit 本身失败不改状态，先 submit 再决定撤不撤，这条写进 skill 而不是代码 |
+| 13 | **`release` 先打印计划再问 `go?`**，非 TTY 要 `--yes` | 它会上传、会提审，agent 跑要显式承担 |
+| 14 | **不做的事**：不改版本号、不验 UI、不自动 cancel | 版本号是判断；UI 验证耦合进发布链的两个坏处写在 od-mobile 的 release-runbook.md；cancel 见 #12 |
+| 15 | **What's New 走 `<dir>/<版本>/<locale>.txt`**，也接受 `--file locale=path` | 旧命令按 zh/en 位置传两个文件，locale 写死。目录约定让 agent 起草、人过目、命令读取三步分开 |
+| 16 | **定时发布的时刻可配置**（`release.scheduledTime`），默认 `00:00:00Z` | 旧代码写死 `T08:00:00-07:00`（= 美西早八点）。od-mobile 的配置里保留了这个值 |
+| 17 | **`--json` 全命令支持**，进度走 stderr | agent 不刮屏幕；`Out.emit` 收数据、`finish` 一次打出；`note()` 永远到 stderr |
+| 18 | **CLI 文案英文，本文与 od-mobile 侧文档中文** | 面向开源受众；od-mobile 的接手者仍按仓库惯例读中文 |
+| 19 | **Android / Google Play 明确不在范围** | 仓库里没有任何积累；README 写明只做 iOS 比做一半好 |
+
+## 4. 从 od-mobile 抽出来时改掉的硬编码
+
+盘点见当天的会话，落到代码里的：app id 原来在五个文件各写一份、只有一处认环境变量 →
+现在只在 `storeship.config.json`；key/issuer 在 `.ts` 和 `.sh` 各一份 → 一份；
+`media-status` 默认版本写死 `1.3.0` → 必填参数；订阅商品 id → `products` 别名表；
+locale 对 `zh-Hans`/`en-US` 写死 → `locales` 数组。
+
+**od-mobile 侧对应改动**（2026-09-07）：`tools/asc/*`、`tools/release/*` 已删；
+六格文案从 `docs/appstore/store-listing.md` 搬到 `docs/appstore/listing.md`（新格式），
+原文只留理由；1.3.1 的 What's New 搬到 `docs/appstore/whats-new/1.3.1/`；
+`release-runbook.md` 改成 storeship 的命令。真机验证：只读命令
+（`version status` / `builds` / `media status` / `offer list` / `listing diff` / `doctor`）
+对真实 ASC 跑过，`listing diff 1.3.1` 逐格相等证明格式转换无损。
+**写命令（create / whatsnew / attach / submit / push / upload / ship）只有单测（假 fetch）**，
+要等下一次真发版验收——那是拆成独立仓库之前的最后一道门。
+
+## 5. 后续阶段（Ken 2026-09-07 定的范围：发布链打底，截图 / 预览视频 / 小红书视频都要，配 agent skill）
+
+### 5.1 `shots`：商店截图合成
+
+od-mobile 的 `tools/store-shot/` 已经是「校验 + HTML 渲成精确像素 + 联系表」的流水线，
+只是设计层（颜色、装饰、七张图的裁剪坐标）全是该项目的。抽法：
+
+- **工具提供**：设备档表（尺寸 / 缩放单位）、源截图命名约定与尺寸校验、Chrome headless 渲染、
+  `--sheet` 联系表、「所有问题一次报完」的检查器（这条路上的错误全是静默的：裁剪越界只漏一条底色）。
+- **用户提供**：`shots.config` 指向一个**模板模块**（导出 `shotHtml(shot, locale, device, images) → html`）
+  和一个**内容文件**（每张图的 slug / 标题 / 每设备的裁剪框）。随包带一个中性默认模板，开箱能出图。
+- **模拟器驱动**（`sim.py` 的 idb / CGEvent 两路、`ui.py` 的 a11y 定位）值得一起带：`storeship sim tap|drag|shot|ls`。
+  种演示数据（`seed-sim.ts`）是项目的，做成 hook：`shots.seed: "<脚本路径>"`。
+- 设计约束（unit 只缩字号和边距、版式按设备重排、走针跨整套推进、2.3.3 合规边界）进 skill，不进代码。
+
+### 5.2 `preview`：App Store 预览视频
+
+`tools/preview/cut.sh` 的核心是三条 VFR 教训（模拟器录像不能直接 xfade、offset 用实际时长、
+不能 `trim` 掉第 0 帧），值得带；`ffmpeg` 走 `STORESHIP_FFMPEG` 或 PATH。
+录制那半（`simctl io recordVideo`、`pkill -INT` 才能停、状态栏 override）是流程，进 skill。
+
+### 5.3 `reel`：竖版社交视频
+
+`tools/reel/` 的 AVFoundation 合成器（旋转矩阵、y 轴翻转、裁剪顺序、BAND 对齐校验）通用；
+卡片文案与配色是项目的 → 模板 + 内容文件，同 5.1。音频按帧时间戳对齐、不能靠耳朵，进 skill。
+
+### 5.4 skill 的分工原则
+
+**代码做确定性的事并且校验；skill 做流程和判断。** 每个 skill 都要写清「哪些是人的决定」
+（版本号、发布日、文案、是否撤回、裁剪框选哪一段），agent 起草、人拍板。
+每条命令 `--json`，skill 只读结构、不刮屏幕。
+
+## 6. 拆成独立仓库前的门槛
+
+1. 一次真实发版用 `storeship release` 走完（写路径的真机验证）。
+2. 定名字和许可证；`package.json` 的 `repository` 现在是 `TODO`。
+3. `pnpm build` 出 `dist/`，`npm pack` 装到一个空目录里跑 `doctor` / `version status`（验 #2 那条）。
+4. README 里的例子全部用假 id 重跑一遍（现在的例子 id 是 od-mobile 的真值改过的）。
+5. od-mobile 改成从 npm 装（`devDependencies: storeship@^0.1`），`pnpm storeship` 脚本改回 bin。

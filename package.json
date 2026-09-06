@@ -1,0 +1,45 @@
+{
+  "name": "storeship",
+  "version": "0.1.0",
+  "description": "Ship an Expo / React Native iOS app to the App Store from your Mac: archive, export, upload, metadata, media, review submission, offer codes. Zero dependencies, the traps encoded as guardrails.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "storeship": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "keywords": [
+    "app-store-connect",
+    "expo",
+    "react-native",
+    "ios",
+    "release",
+    "xcodebuild",
+    "altool",
+    "screenshots"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "prepublishOnly": "pnpm build && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "~6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ken2021/storeship"
+  }
+}

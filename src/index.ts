@@ -1,0 +1,12 @@
+/** Library surface: the same functions the CLI calls, for scripts and agents that prefer code. */
+export { createClient, signJwt, explain, ok, AscError, type AscClient, type AscResult } from './asc/client.ts'
+export * from './asc/versions.ts'
+export * from './asc/listing.ts'
+export * from './asc/media.ts'
+export * from './asc/misc.ts'
+export * from './asc/offers.ts'
+export * from './asc/analytics.ts'
+export * from './ios/xcode.ts'
+export { loadConfig, resolveConfig, findConfigFile, defaultKeyPath, type Config, type RawConfig } from './config.ts'
+export { StoreshipError, UsageError, ConfigError } from './errors.ts'
+export { HINTS, hintFor } from './hints.ts'
