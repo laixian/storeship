@@ -1,6 +1,6 @@
 ---
 name: storeship-products
-description: Set up or change App Store subscriptions and pricing with the storeship CLI — subscription groups, subscriptions, localized names, price tiers equalized across territories, availability, review screenshots, and the app's own price, all from products.md. Use when asked to add a subscription, change a price, localize a product, or set up in-app purchases.
+description: Set up or change App Store subscriptions, pricing and offer codes with the storeship CLI — subscription groups, subscriptions, localized names, price tiers equalized across territories, availability, review screenshots, the app's own price (all from products.md), and free offer codes to give a subscription away. Use when asked to add a subscription, change a price, localize a product, set up in-app purchases, or generate redemption / offer / promo codes.
 ---
 
 # Subscriptions and pricing with storeship
@@ -43,7 +43,29 @@ A new subscription is **not** submitted by `push`. It goes for review with the n
 - `409 ATTRIBUTE.NOT_ALLOWED` on `period` / `productId`: immutable; the diff already warned. A different period means a new subscription.
 - `404` creating a localization: the subscription was just created and ASC has not indexed it; run `push` again.
 
+## Offer codes: giving a subscription away
+
+A different job from the file above, same command family. Offer codes let someone redeem a subscription for free, with no server and no back door in the entitlement logic — Apple records the subscription on their account and the app keeps reading the one source of truth it always reads. **App Store Connect has no web UI for these at all**; this is the only route.
+
+```bash
+storeship offer list --json                     # existing offers and code batches per product
+storeship offer new --name "launch-2026" --product yearly --duration ONE_YEAR --codes 500 --json
+storeship offer csv --batch <id> --out codes.csv   # re-download a batch
+storeship offer off --offer <id>                # kills every code in it, immediately
+```
+
+`offer new` creates the offer, issues a one-time-use batch and writes the CSV. The second column of each row is a redemption link you can hand to a person directly.
+
+Three things only Apple's validator would otherwise tell you, all already handled by the tool — do not "fix" them by hand:
+
+- A free offer still needs a non-empty territory list; it says *where* the code can be redeemed, not what it costs. The list is copied from the product's current price table, never typed, because a territory left out simply cannot redeem.
+- `autoRenewEnabled` can only be set when the offer is created. Apple's default is **true** — the subscription renews at full price when the free period ends. storeship defaults it to **false**; `--renew` opts in. There is no way to change it afterwards, so ask which one the human wants before creating.
+- The app must be **Ready for Sale** before any code can be redeemed. During review you can only verify that the redemption sheet opens.
+
+Judgement calls to put to the human: the offer name (unique per product, and it is permanent), how many codes, the expiry (`--expires`, at most about six months out), and eligibility (`--eligibility NEW,EXISTING,EXPIRED`; default NEW only, which excludes your current subscribers).
+
 ## Never
 
+- Never run `offer off` on your own initiative: every code in that offer stops working the moment you do, including ones already handed out.
 - Never put a demo password or any credential in `products.md`.
 - Never "fix" a price mismatch by editing territories one by one in the web UI while the file says otherwise — change the file and push.
