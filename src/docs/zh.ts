@@ -54,6 +54,7 @@ export const ZH: Record<string, ZhEntry> = {
     flags: { dir: '放各语言 <locale>.txt 的目录；默认 <whatsNew.dir>/<version>', file: '单独指定某语言的文件，可重复：--file en-US=notes/en.txt', 'dry-run': '只打印要写的内容，不写' },
   },
   'version attach': { summary: '把构建挂到版本上（要 VALID）；--wait 等它变 VALID', flags: { build: '要挂的构建号（CFBundleVersion）；默认账号里最新的那个', wait: '每 30 秒轮询直到构建变 VALID（给了 --build 就是等它出现并变 VALID），而不是直接失败', timeout: '--wait 最多等的分钟数；默认 30' } },
+  'version watch': { summary: '轮询到审核有结论为止；退出码 0 过审、3 被拒、4 还没结论', flags: { interval: '两次轮询之间的分钟数；默认 10', timeout: '最多守多少分钟；默认 1440（24 小时）', once: '只查一次就退出，不轮询' } },
   'version submit': { summary: '提交审核' },
   'version cancel': { summary: '撤回在审的提交单（单向：排队位置作废）', flags: { yes: '必须给：撤回是单向的，排队位置当场作废' } },
   builds: { summary: '最近的构建及其处理状态' },

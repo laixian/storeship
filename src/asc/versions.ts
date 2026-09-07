@@ -201,3 +201,78 @@ export async function cancelSubmissions(c: AscClient, appId: string): Promise<{ 
   }
   return out
 }
+
+// ---------------------------------------------------------------- watching a review
+
+/**
+ * Watching a submission through review.
+ *
+ * Apple's *reason* for a rejection is only in Resolution Center, which is not in
+ * the API — but the *event* is, in three places, and they do not always move
+ * together: the version's own state, the review submission's state, and the state
+ * of each item in that submission (a submission can carry the app version and
+ * other items, so the item states say which one was turned down).
+ */
+export type Verdict = 'approved' | 'rejected' | 'pending'
+
+export const REJECTED_VERSION_STATES = new Set(['REJECTED', 'METADATA_REJECTED', 'DEVELOPER_REJECTED'])
+export const APPROVED_VERSION_STATES = new Set(['PENDING_DEVELOPER_RELEASE', 'PENDING_APPLE_RELEASE', 'PROCESSING_FOR_DISTRIBUTION', 'READY_FOR_DISTRIBUTION', 'READY_FOR_SALE'])
+
+/** Pure. The version state decides; the submission only breaks a tie while the version still reads as pending. */
+export function classifyVersion(versionState: string, submissionState?: string, itemStates: string[] = []): Verdict {
+  if (REJECTED_VERSION_STATES.has(versionState)) return 'rejected'
+  if (APPROVED_VERSION_STATES.has(versionState)) return 'approved'
+  if (submissionState === 'UNRESOLVED_ISSUES' || itemStates.includes('REJECTED')) return 'rejected'
+  return 'pending'
+}
+
+export type WatchSnapshot = {
+  version: string
+  versionId: string
+  versionState: string
+  submissionId?: string
+  submissionState?: string
+  /** Every item of that submission; `version` is set on the one that is this app version. */
+  items: { id: string; state: string; version?: string }[]
+  verdict: Verdict
+}
+
+export async function readWatchSnapshot(c: AscClient, appId: string, version: string): Promise<WatchSnapshot> {
+  const v = await requireVersion(c, appId, version)
+  const snap: WatchSnapshot = { version, versionId: v.id, versionState: v.state, items: [], verdict: 'pending' }
+  // Newest first; a submission that is done and irrelevant is skipped, and the one
+  // carrying this version is usually the first or second.
+  const subs = ok(await c.get(`/v1/apps/${appId}/reviewSubmissions?limit=5`), 'read review submissions').json?.data ?? []
+  for (const sub of subs) {
+    if (sub.attributes?.state === 'COMPLETE') continue
+    const items = ok(await c.get(`/v1/reviewSubmissions/${sub.id}/items?include=appStoreVersion&limit=20`), 'read submission items').json
+    const rows = (items?.data ?? []).map((i: any) => ({ id: i.id, state: i.attributes?.state as string, version: (items.included ?? []).find((x: any) => x.type === 'appStoreVersions' && x.id === i.relationships?.appStoreVersion?.data?.id)?.attributes?.versionString as string | undefined }))
+    if (!rows.some((r: { version?: string }) => r.version === version)) continue
+    snap.submissionId = sub.id
+    snap.submissionState = sub.attributes?.state
+    snap.items = rows
+    break
+  }
+  snap.verdict = classifyVersion(snap.versionState, snap.submissionState, snap.items.map((i) => i.state))
+  return snap
+}
+
+/** Poll until the verdict is no longer `pending`, or the deadline passes. */
+export async function watchVersion(
+  c: AscClient,
+  appId: string,
+  version: string,
+  opts: { intervalMs?: number; timeoutMs?: number; once?: boolean; onPoll?: (s: WatchSnapshot, changed: boolean) => void; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<WatchSnapshot> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
+  const deadline = Date.now() + (opts.timeoutMs ?? 24 * 60 * 60_000)
+  let last = ''
+  for (;;) {
+    const snap = await readWatchSnapshot(c, appId, version)
+    const key = `${snap.versionState}|${snap.submissionState ?? ''}|${snap.items.map((i) => i.state).join(',')}`
+    opts.onPoll?.(snap, last !== '' && key !== last)
+    last = key
+    if (snap.verdict !== 'pending' || opts.once || Date.now() + (opts.intervalMs ?? 10 * 60_000) > deadline) return snap
+    await sleep(opts.intervalMs ?? 10 * 60_000)
+  }
+}

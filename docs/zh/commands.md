@@ -163,7 +163,7 @@ products.md 与 ASC 逐项比较，打印要做的每一步；不写
 
 App Store 版本记录：状态、创建、What's New、挂构建、提审、撤回
 
-子命令: [`status`](#version-status) · [`create`](#version-create) · [`whatsnew`](#version-whatsnew) · [`attach`](#version-attach) · [`submit`](#version-submit) · [`cancel`](#version-cancel)
+子命令: [`status`](#version-status) · [`create`](#version-create) · [`whatsnew`](#version-whatsnew) · [`attach`](#version-attach) · [`watch`](#version-watch) · [`submit`](#version-submit) · [`cancel`](#version-cancel)
 
 ### `version status`
 
@@ -204,6 +204,18 @@ App Store 版本记录：状态、创建、What's New、挂构建、提审、撤
 | `--build` | 要挂的构建号（CFBundleVersion）；默认账号里最新的那个 |
 | `--wait` | 每 30 秒轮询直到构建变 VALID（给了 --build 就是等它出现并变 VALID），而不是直接失败 |
 | `--timeout` | --wait 最多等的分钟数；默认 30 |
+
+### `version watch`
+
+轮询到审核有结论为止；退出码 0 过审、3 被拒、4 还没结论
+
+用法: `storeship version watch <version> [--interval MIN] [--timeout MIN] [--once]`
+
+| 参数 | |
+|---|---|
+| `--interval` | 两次轮询之间的分钟数；默认 10 |
+| `--timeout` | 最多守多少分钟；默认 1440（24 小时） |
+| `--once` | 只查一次就退出，不轮询 |
 
 ### `version submit`
 

@@ -82,7 +82,7 @@ Claude Code 下一次会话就能用，之后一句「发 1.4.0，定 10 月 1 �
 | `ship [--skip-upload]` | 预检 → 归档 → 导出 → 上传 |
 | `upload <ipa>` | 上传一个已有的 IPA |
 | `release <版本> [--date D] [--no-ship] [--no-submit] [--yes]` | 整条链，先打印计划再问一句 |
-| `version status \| create \| whatsnew \| attach --wait \| submit \| cancel --yes` | 版本记录 |
+| `version status \| create \| whatsnew \| attach --wait \| submit \| watch \| cancel --yes` | 版本记录；`watch` 守到审核有结论（退出码 0 过审 / 3 被拒 / 4 未决） |
 | `builds` | 最近的构建及处理状态 |
 | `listing check \| diff \| push <版本>` | 商店文案：离线查上限 / 与 ASC 对账 / 写入差异 |
 | `media status \| upload \| mkset \| list \| delete` | 截图与预览的槽位 |

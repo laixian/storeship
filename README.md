@@ -104,6 +104,7 @@ Every command takes `--json` for machine-readable output (progress still goes to
 | `version whatsnew <ver> [--dir D \| --file <locale>=<path>…]` | write What's New per locale |
 | `version attach <ver> [--wait]` | attach the newest build; `--wait` polls until it is VALID |
 | `version submit <ver>` | submit for review |
+| `version watch <ver> [--once]` | poll until review decides; exit 0 approved, 3 rejected, 4 undecided |
 | `version cancel --yes` | withdraw the open submission (one-way; the flag is deliberate) |
 | `builds` | recent builds and processing state |
 | `listing check` | parse the listing file, check character limits (offline) |

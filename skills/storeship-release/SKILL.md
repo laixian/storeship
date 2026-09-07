@@ -51,6 +51,8 @@ Permission rules the human can add so none of this prompts (Claude Code, `.claud
 
 ## After a rejection
 
+You do not have to keep checking. `storeship version watch <version> --json` polls until the review reaches a verdict and exits **0 approved / 3 rejected / 4 no decision yet**, so it can be left running in the background or re-run from a scheduled job — `--once` checks and returns immediately. On a rejection it names the items that were turned down, which matters when the submission carried subscriptions as well as the app.
+
 **Apple's reason is not in the API.** Resolution Center is web-only, so you cannot read why the version was rejected — ask the human to paste Apple's message, and never guess at it. Fixing the wrong thing costs another review cycle.
 
 `storeship version status --json` first. A version Apple rejected is **already editable**: do not run `version cancel` on it. Cancel is only for a version still sitting in the queue.

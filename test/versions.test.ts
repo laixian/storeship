@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import { describe, it } from 'node:test'
 import { createClient } from '../src/asc/client.ts'
-import { attachLatestBuild, createVersion, submitVersion } from '../src/asc/versions.ts'
+import { attachLatestBuild, classifyVersion, createVersion, submitVersion, watchVersion } from '../src/asc/versions.ts'
 import { uploadMedia } from '../src/asc/media.ts'
 import { diffReview, pushReview } from '../src/asc/listing.ts'
 import { writeFileSync } from 'node:fs'
@@ -178,5 +178,59 @@ describe('review detail', () => {
     assert.deepEqual(await pushReview(client, 'v1', st), ['notes', 'demoAccountName', 'demoAccountPassword'])
     assert.deepEqual(posted.data.relationships, { appStoreVersion: { data: { type: 'appStoreVersions', id: 'v1' } } })
     assert.deepEqual(posted.data.attributes, { notes: 'n', demoAccountName: 'demo', demoAccountPassword: 'pw' })
+  })
+})
+
+describe('watching a review', () => {
+  it('classifies from the version state first, then the submission and its items', () => {
+    assert.equal(classifyVersion('WAITING_FOR_REVIEW'), 'pending')
+    assert.equal(classifyVersion('IN_REVIEW'), 'pending')
+    assert.equal(classifyVersion('REJECTED'), 'rejected')
+    assert.equal(classifyVersion('METADATA_REJECTED'), 'rejected')
+    assert.equal(classifyVersion('PENDING_DEVELOPER_RELEASE'), 'approved')
+    assert.equal(classifyVersion('READY_FOR_DISTRIBUTION'), 'approved')
+    // The submission can turn before the version does; an item can too.
+    assert.equal(classifyVersion('IN_REVIEW', 'UNRESOLVED_ISSUES'), 'rejected')
+    assert.equal(classifyVersion('IN_REVIEW', 'IN_REVIEW', ['APPROVED', 'REJECTED']), 'rejected')
+    assert.equal(classifyVersion('IN_REVIEW', 'IN_REVIEW', ['APPROVED']), 'pending')
+    // …but an approved version is never overridden by a stale submission row.
+    assert.equal(classifyVersion('READY_FOR_DISTRIBUTION', 'UNRESOLVED_ISSUES'), 'approved')
+  })
+
+  it('polls until the verdict changes, and names the rejected item', async () => {
+    let polls = 0
+    const { client } = fake({
+      'GET /v1/apps/A/appStoreVersions': () => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: ++polls < 3 ? 'IN_REVIEW' : 'REJECTED', platform: 'IOS' } }] }),
+      'GET /v1/apps/A/reviewSubmissions': () => ({ data: [{ id: 'sub1', attributes: { state: polls < 3 ? 'IN_REVIEW' : 'UNRESOLVED_ISSUES' } }] }),
+      'GET /v1/reviewSubmissions/sub1/items': () => ({
+        data: [{ id: 'i1', attributes: { state: polls < 3 ? 'READY_FOR_REVIEW' : 'REJECTED' }, relationships: { appStoreVersion: { data: { id: 'v1' } } } }],
+        included: [{ type: 'appStoreVersions', id: 'v1', attributes: { versionString: '1.0' } }],
+      }),
+    })
+    const seen: string[] = []
+    const snap = await watchVersion(client, 'A', '1.0', { intervalMs: 1, sleep: async () => {}, onPoll: (s, changed) => seen.push(`${s.versionState}${changed ? '*' : ''}`) })
+    assert.equal(snap.verdict, 'rejected')
+    assert.deepEqual(seen, ['IN_REVIEW', 'IN_REVIEW', 'REJECTED*'])
+    assert.deepEqual(snap.items, [{ id: 'i1', state: 'REJECTED', version: '1.0' }])
+  })
+
+  it('--once returns whatever is true right now instead of waiting', async () => {
+    const { client } = fake({
+      'GET /v1/apps/A/appStoreVersions': () => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: 'WAITING_FOR_REVIEW', platform: 'IOS' } }] }),
+      'GET /v1/apps/A/reviewSubmissions': () => ({ data: [] }),
+    })
+    const snap = await watchVersion(client, 'A', '1.0', { once: true, sleep: async () => assert.fail('must not sleep') })
+    assert.equal(snap.verdict, 'pending')
+    assert.equal(snap.submissionState, undefined)
+  })
+
+  it('ignores a COMPLETE submission that is not this version', async () => {
+    const { client } = fake({
+      'GET /v1/apps/A/appStoreVersions': () => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: 'PENDING_DEVELOPER_RELEASE', platform: 'IOS' } }] }),
+      'GET /v1/apps/A/reviewSubmissions': () => ({ data: [{ id: 'old', attributes: { state: 'COMPLETE' } }] }),
+    })
+    const snap = await watchVersion(client, 'A', '1.0', { once: true })
+    assert.equal(snap.verdict, 'approved')
+    assert.equal(snap.submissionId, undefined)
   })
 })

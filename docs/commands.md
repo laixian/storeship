@@ -163,7 +163,7 @@ Usage: `storeship products delete <productId> --yes [--with-group]`
 
 App Store version records: status, create, whatsnew, attach, submit, cancel
 
-Subcommands: [`status`](#version-status) · [`create`](#version-create) · [`whatsnew`](#version-whatsnew) · [`attach`](#version-attach) · [`submit`](#version-submit) · [`cancel`](#version-cancel)
+Subcommands: [`status`](#version-status) · [`create`](#version-create) · [`whatsnew`](#version-whatsnew) · [`attach`](#version-attach) · [`watch`](#version-watch) · [`submit`](#version-submit) · [`cancel`](#version-cancel)
 
 ### `version status`
 
@@ -204,6 +204,18 @@ Usage: `storeship version attach <version> [--build N] [--wait] [--timeout MIN]`
 | `--build` | build number (CFBundleVersion) to attach; default: the newest build in the account |
 | `--wait` | poll every 30 s until the build is VALID (or, with --build, until it appears and is VALID) instead of failing |
 | `--timeout` | minutes to keep waiting with --wait; default 30 |
+
+### `version watch`
+
+poll until the review reaches a verdict; exit 0 approved, 3 rejected, 4 no decision yet
+
+Usage: `storeship version watch <version> [--interval MIN] [--timeout MIN] [--once]`
+
+| Flags | |
+|---|---|
+| `--interval` | minutes between polls; default 10 |
+| `--timeout` | minutes to keep watching; default 1440 (24 h) |
+| `--once` | check once and exit instead of polling |
 
 ### `version submit`
 

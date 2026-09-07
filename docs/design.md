@@ -254,6 +254,26 @@ diff 说没变化，实际上该改的没改。都在发 0.2.0 到 npm 之前修
 就只能比那个标量，而 diff 的整个价值在于「说没变化就是真没变化」。**对账工具的读路径要读回
 足以重建那个对象的全部信息**，宁可多一次分页请求。
 
+## 8. `version watch`：驳回这件事是能被发现的（2026-09-08）
+
+Ken 问「被驳回是不是只能他大半夜自己发现」。**事件能发现，理由不能**——这两件事我一开始混为一谈了。
+实测 od-mobile 在审的那一单，API 里有三层信号，而且**它们不一定同时翻**：
+
+| 读什么 | 在审时 | 被驳回时 |
+|---|---|---|
+| `appStoreVersions.appVersionState` | `WAITING_FOR_REVIEW` → `IN_REVIEW` | `REJECTED` / `METADATA_REJECTED` / `DEVELOPER_REJECTED` |
+| `reviewSubmissions.state` | 同上 | `UNRESOLVED_ISSUES` |
+| `reviewSubmissionItems.state`（`?include=appStoreVersion` 才对得上版本） | `READY_FOR_REVIEW` | 逐项 `APPROVED` / `REJECTED` |
+
+第三层的价值是**一单里可能同时挂着 App 版本和订阅**，item 级别才说得出是哪一项被拒。
+
+| # | 决定 | 理由 |
+|---|------|------|
+| 34 | **`version watch <版本>`：轮询到有结论为止，退出码 0 过审 / 3 被拒 / 4 未决**；`--once` 只查一次 | 退出码让调用方（cron、`/loop`、agent）能分支，而不用去刮输出 |
+| 35 | **不做 `--on-change` 这类钩子**（Ken 2026-09-08 提的） | 跑这条命令的本来就是 agent，它返回了 agent 直接读输出即可；要唤醒一个不在跟前的 agent，那是 harness（定时任务 / loop）的职责，不是本工具的 |
+| 36 | **判据以版本状态为准**，提交单和 item 只在版本还读作 pending 时用来提前判定 | 三层不同时翻；已经 approved 的版本不该被一条过期的提交单记录翻回 rejected |
+| 37 | **不做「自动修复并重新提交」** | 理由不在 API 里，不知道原因就改等于猜；猜完自动提交，是拿一个审核周期赌一个猜测，而代价由用户承担。**自动化到「醒来时一切就绪」为止，按下提交的是人** |
+
 ### 7.5 验证（2026-09-08 全部做完）
 
 - **读路径 ✅**：od-mobile 的 `products.md` 照现状写（一组两订阅 + 免费 App），`products diff` 为空——15 项全部 `=`。

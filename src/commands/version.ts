@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { attachLatestBuild, cancelSubmissions, createVersion, listBuilds, listVersions, requireVersion, submitVersion, writeWhatsNew } from '../asc/versions.ts'
+import { attachLatestBuild, cancelSubmissions, createVersion, listBuilds, listVersions, requireVersion, submitVersion, watchVersion, writeWhatsNew } from '../asc/versions.ts'
 import { type Command, type Ctx } from '../ctx.ts'
 import { StoreshipError, UsageError } from '../errors.ts'
 import { table } from '../out.ts'
@@ -91,6 +91,35 @@ export const versionCommand: Command = {
         else {
           ctx.out.log(`build ${r.build.version} is ${r.build.processingState}, not VALID yet — retry, or use --wait`)
           process.exitCode = 1
+        }
+      },
+    },
+    {
+      name: 'watch',
+      summary: 'poll until the review reaches a verdict; exit 0 approved, 3 rejected, 4 no decision yet',
+      usage: 'version watch <version> [--interval MIN] [--timeout MIN] [--once]',
+      flags: { interval: 'minutes between polls; default 10', timeout: 'minutes to keep watching; default 1440 (24 h)', once: 'check once and exit instead of polling' },
+      booleans: ['once'],
+      run: async (ctx) => {
+        const version = ctx.args.at(0, 'version')
+        const snap = await watchVersion(ctx.client(), ctx.appId(), version, {
+          intervalMs: ctx.args.num('interval', 10) * 60_000,
+          timeoutMs: ctx.args.num('timeout', 1440) * 60_000,
+          once: ctx.args.bool('once'),
+          onPoll: (s, changed) => ctx.out.note(`${s.versionState}${s.submissionState ? ` / submission ${s.submissionState}` : ''}${changed ? '  ← changed' : ''}`),
+        })
+        ctx.out.emit(snap)
+        const rejectedItems = snap.items.filter((i) => i.state === 'REJECTED')
+        if (snap.verdict === 'rejected') {
+          ctx.out.log(`${version} was rejected (${snap.versionState}${snap.submissionState ? `, submission ${snap.submissionState}` : ''}).`)
+          if (rejectedItems.length) ctx.out.log(`  rejected item(s): ${rejectedItems.map((i) => i.version ?? i.id).join(', ')}`)
+          ctx.out.log("Apple's reason is only in Resolution Center, which is not in the API — read it there (or in the email) and paste it in before changing anything.")
+          process.exitCode = 3
+        } else if (snap.verdict === 'approved') {
+          ctx.out.log(`${version} is ${snap.versionState}.`)
+        } else {
+          ctx.out.log(`${version} is still ${snap.versionState}; no verdict yet.`)
+          process.exitCode = 4
         }
       },
     },
