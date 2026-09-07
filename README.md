@@ -24,10 +24,28 @@ storeship is the middle: **zero runtime dependencies** (Node ≥ 22.18 runs the 
 - Node ≥ 22.18
 - An App Store Connect API key (App Manager role is enough for releasing; Admin for analytics)
 
-## Setup
+## Install
+
+Three ways, all from npm; nothing else to install (Node ≥ 22.18, zero runtime dependencies).
 
 ```bash
+# in the project — recommended, the version is pinned in package.json
 npm i -D storeship            # or: pnpm add -D storeship
+npx storeship --version
+
+# globally
+npm i -g storeship
+storeship --version
+
+# no install at all
+npx storeship@latest doctor
+```
+
+The npm package is the compiled build. The TypeScript sources live only in the Git repo; to run from source (to change the tool itself): `git clone https://github.com/laixian/storeship && cd storeship && pnpm install && pnpm build && node dist/cli.js …`.
+
+### Configure
+
+```bash
 npx storeship init            # writes storeship.config.json from expo config + ASC
 npx storeship doctor          # every prerequisite, with the fix for each miss
 ```
@@ -56,6 +74,19 @@ The key id, issuer id, app id and team id are identifiers, not secrets; they go 
 ```
 
 Relative paths resolve from the config file, so commands work from any subdirectory. `ios.workspace`, `ios.scheme` and `ios.infoPlist` are derived from `<projectDir>/ios` unless set. `ios.exportOptions` merges extra keys into the generated `ExportOptions.plist`. A `.ts` / `.mjs` config file exporting the same object also works.
+
+### Agent skills
+
+The package ships four Claude Code skills — `storeship-release`, `storeship-shots`, `storeship-preview`, `storeship-reel` — each a procedure for one job, with the judgement calls left to you. Install them once per project:
+
+```bash
+npx storeship skill list
+npx storeship skill install                                   # → .claude/skills/storeship-*/SKILL.md
+npx storeship skill install --only storeship-release          # just one
+npx storeship skill install --to ~/.claude/skills             # user-wide instead of per project
+```
+
+Claude Code loads them at the next session; from then on "release 1.4.0, scheduled for Oct 1" is a complete instruction. The files are copies, not links — run `skill install` again after upgrading the package. See *For agents* below for the one permission rule that lets the agent run the release without prompting.
 
 ## Commands
 

@@ -26,8 +26,26 @@ storeship 在中间：**零运行时依赖**（Node ≥ 22.18 直接跑 TypeScri
 
 ## 安装
 
+三种装法，都从 npm 来，别的什么都不用装（Node ≥ 22.18，零运行时依赖）。
+
 ```bash
+# 装进项目——推荐，版本号钉在 package.json 里
 npm i -D storeship            # 或 pnpm add -D storeship
+npx storeship --version
+
+# 全局
+npm i -g storeship
+storeship --version
+
+# 不装，直接用
+npx storeship@latest doctor
+```
+
+npm 包是编译好的产物；TypeScript 源码只在 Git 仓库里。要从源码跑（改工具本身时）：`git clone https://github.com/laixian/storeship && cd storeship && pnpm install && pnpm build && node dist/cli.js …`。
+
+### 配置
+
+```bash
 npx storeship init            # 从 expo config + ASC 生成 storeship.config.json
 npx storeship doctor          # 逐项检查，缺什么说怎么补
 ```
@@ -39,6 +57,19 @@ npx storeship doctor          # 逐项检查，缺什么说怎么补
 ```
 
 key id、issuer id、app id、team id 是标识符不是密钥，放进配置文件。环境变量覆盖文件：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`、`ASC_APP_ID`、`ASC_TEAM_ID`。配置的每一个键见[配置参考](config.md)。
+
+### 装 agent skill
+
+包里带四个 Claude Code skill：`storeship-release`、`storeship-shots`、`storeship-preview`、`storeship-reel`，每个是一件事的操作规程，判断留给你。每个项目装一次：
+
+```bash
+npx storeship skill list
+npx storeship skill install                                   # → .claude/skills/storeship-*/SKILL.md
+npx storeship skill install --only storeship-release          # 只装一个
+npx storeship skill install --to ~/.claude/skills             # 装到用户级，不按项目
+```
+
+Claude Code 下一次会话就能用，之后一句「发 1.4.0，定 10 月 1 日上线」就是完整指令。装进去的是拷贝不是链接，升级包之后要再跑一次 `skill install`。让 agent 跑发版不被反复确认要加的那一条权限规则见下面「给 agent」。
 
 ## 命令
 

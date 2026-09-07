@@ -18,6 +18,8 @@ npx storeship doctor
 
 `init` reads `expo config` for the bundle id and team id, asks App Store Connect for the app id and the localizations, and writes `storeship.config.json`. `doctor` checks everything the later steps need and says how to fix each miss. Commit the config file; it holds identifiers, not secrets.
 
+If Claude Code will be doing this with you, also `npx storeship skill install` (copies the four skills into `.claude/skills/`) and add the permission rule from README → *For agents*.
+
 ## 2. Set the version and generate the native project
 
 The version number is a judgement, so the tool never changes it. Edit `app.config.*`: `version` (what users see) and `ios.buildNumber` (must increase with every upload, even for the same version). Then:
