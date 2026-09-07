@@ -146,6 +146,17 @@ What's New lives in `<whatsNew.dir>/<version>/<locale>.txt`, or is passed with `
 
 `--json` on every command. `storeship skill install` copies Claude Code skills into `.claude/skills/`: the release runbook as a procedure, with the judgement calls (version number, whether to cancel, what to write) left to the human.
 
+**Let the agent run the whole release.** Two things stop it in practice, neither of them in this tool:
+
+1. **Permission prompts.** `release` bundles `xcodebuild`, an `altool` upload and several App Store Connect writes into one command, and a permission classifier will often refuse that one command while allowing each step. Add an allow rule once (Claude Code, `.claude/settings.local.json`; `pnpm storeship *` in a pnpm repo, `npx storeship *` otherwise):
+
+   ```json
+   { "permissions": { "allow": ["Bash(pnpm storeship *)", "Bash(npx storeship *)"] } }
+   ```
+
+   The bundled skill also runs the release as two commands (`ship`, then `release --no-ship`) so a refusal on the build half does not take the App Store Connect half down with it.
+2. **Xcode signed out.** `export` needs an Apple ID in Xcode → Settings → Accounts (sessions expire; Xcode updates drop them). `storeship doctor` reports it as `Xcode account` before a seven-minute archive finds out. Signing back in is a GUI action; afterwards resume with `release <version> --archive <path.xcarchive>` instead of archiving again.
+
 ## Screenshots
 
 Real simulator screenshots + a template + a content file → exact-size PNGs for every device × locale, validated, with a contact sheet, uploaded by display type.

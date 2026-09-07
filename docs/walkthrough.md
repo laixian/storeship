@@ -92,7 +92,14 @@ npx storeship release 1.0.0 --date 2026-10-01
 
 It prints the plan and asks once, then: preflight → `xcodebuild archive` → `xcodebuild -exportArchive` (never with the API key: that switches Xcode to cloud signing and fails with a misleading "no distribution certificate" message) → `altool --upload-app` (with the key) → create the version if missing → write What's New → wait for the build to finish processing (usually 5–20 minutes) and attach it → submit for review.
 
-Every step is idempotent. If it fails, read the hint under the error, fix, and run the same command again. If you uploaded the build another way (Xcode Organizer, CI), add `--no-ship`. To stop before review, `--no-submit`, then `npx storeship version submit 1.0.0` later.
+Every step is idempotent. If it fails, read the hint under the error, fix, and run the same command again. If you uploaded the build another way (Xcode Organizer, CI), add `--no-ship` (and `--build <N>` to name it). To stop before review, `--no-submit`, then `npx storeship version submit 1.0.0` later.
+
+Two resume points worth knowing before you need them:
+
+- **Export failed after a good archive** (typically `No Accounts`: Xcode has no Apple ID signed in — Xcode → Settings → Accounts). Sign in, then `npx storeship release 1.0.0 --date … --archive "<path>.xcarchive"`. `doctor` checks the account up front so this normally never happens.
+- **Attach refused with a 409** right after upload: the new build takes minutes to appear in the list and the tool waits for the number it just built. If you attach by hand, name it: `npx storeship version attach 1.0.0 --build <N> --wait`.
+
+If an agent runs this for you, give it a permission rule once (see README → For agents); otherwise the one big `release` command tends to get refused while each of its steps would be allowed.
 
 ## 8. After submitting
 

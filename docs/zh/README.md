@@ -202,6 +202,17 @@ storeship reel make take.mov out.mp4 --start 3.4 --duration 20 [--audio song.wav
 
 每条命令都有 `--json`。`storeship skill install` 把 Claude Code skill 拷进 `.claude/skills/`：发版、截图、预览、reel 的操作规程，判断（版本号、要不要撤回、写什么）留给人。
 
+**让 agent 把整条发布链跑完。** 实际会拦住它的只有两件事，都不在这个工具里：
+
+1. **权限确认。** `release` 一条命令里包着 `xcodebuild`、`altool` 上传和好几次 App Store Connect 写入，权限分类器常常拒掉这一整条，而每一步单看都会放行。加一次允许规则就好（Claude Code 的 `.claude/settings.local.json`；pnpm 仓库用 `pnpm storeship *`，其余用 `npx storeship *`）：
+
+   ```json
+   { "permissions": { "allow": ["Bash(pnpm storeship *)", "Bash(npx storeship *)"] } }
+   ```
+
+   随包的 skill 也把发版拆成两条（先 `ship`，再 `release --no-ship`），构建那一半被拒不会连带把 App Store Connect 那一半也拖死。
+2. **Xcode 没登账号。** `export` 要 Xcode → Settings → Accounts 里登着 Apple ID（会话会过期，升 Xcode 也会掉）。`storeship doctor` 的 `Xcode account` 一项在归档七分钟之前就报出来。登回去是图形界面操作；之后用 `release <版本> --archive <归档路径>` 从导出接着走，不必重新归档。
+
 ## 许可证
 
 MIT

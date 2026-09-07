@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { type Command } from '../ctx.ts'
 import { capture, which } from '../proc.ts'
-import { resolveProject } from '../ios/xcode.ts'
+import { resolveProject, xcodeAccounts } from '../ios/xcode.ts'
 import { FFMPEG_HINT, findFfmpeg } from '../preview/ffmpeg.ts'
 import { findChrome } from '../shots/render.ts'
 import { findIdb } from '../sim/sim.ts'
@@ -31,6 +31,8 @@ export const doctorCommand: Command = {
     add('team id', !!cfg.asc.teamId, cfg.asc.teamId ?? '-', 'set asc.teamId (developer.apple.com → Membership); needed for export')
     add('xcodebuild', !!which('xcodebuild'), capture('xcodebuild', ['-version'])?.split('\n').join(' ') ?? 'missing', 'install Xcode and `xcode-select -s /Applications/Xcode.app`')
     add('altool', !!capture('xcrun', ['--find', 'altool']), capture('xcrun', ['--find', 'altool']) ?? 'missing', 'comes with Xcode')
+    const accounts = xcodeAccounts()
+    add('Xcode account', accounts.length > 0, accounts.length ? `${accounts.length} signed in` : 'no Apple ID signed into Xcode', 'Xcode → Settings → Accounts → sign in with the developer account; without it `export` fails with "No Accounts" (sessions expire, Xcode updates drop them)')
     add('PlistBuddy', existsSync('/usr/libexec/PlistBuddy'), '/usr/libexec/PlistBuddy', 'macOS only')
     try {
       const p = resolveProject(cfg)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { exportOptionsPlist, resolveBuildSetting } from '../src/ios/xcode.ts'
+import { exportOptionsPlist, parseXcodeAccounts, resolveBuildSetting } from '../src/ios/xcode.ts'
 
 describe('ExportOptions.plist', () => {
   it('is app-store-connect / automatic / export, with extras merged and escaped', () => {
@@ -59,5 +59,14 @@ describe('Info.plist build-setting references', () => {
     assert.equal(resolveBuildSetting('$(MARKETING_VERSION)', PBX, 'OverDrive/Info.plist'), '1.3.2')
     assert.equal(resolveBuildSetting('$(PRODUCT_BUNDLE_IDENTIFIER)', PBX, 'OverDrive/Info.plist'), undefined)
     assert.equal(resolveBuildSetting('$(NOPE)', PBX, 'OverDrive/Info.plist', 'Release'), undefined)
+  })
+})
+
+describe('Xcode accounts', () => {
+  it('counts identifier objects and plain strings across every list, and tolerates junk', () => {
+    assert.deepEqual(parseXcodeAccounts('{"IDE.Prod":[],"IDE.Identifiers.Prod":[]}'), [])
+    assert.deepEqual(parseXcodeAccounts('{"IDE.Prod":["a@b.c"],"IDE.Identifiers.Prod":[{"identifier":"9CFD"}]}'), ['a@b.c', '9CFD'])
+    assert.deepEqual(parseXcodeAccounts(undefined), [])
+    assert.deepEqual(parseXcodeAccounts('not json'), [])
   })
 })

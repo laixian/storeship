@@ -79,6 +79,38 @@ export function resolveBuildSetting(value: string | undefined, pbxproj: string, 
   return distinct.size === 1 ? [...distinct][0] : undefined
 }
 
+/**
+ * Apple IDs signed into Xcode, from its preferences. `xcodebuild -exportArchive
+ * -allowProvisioningUpdates` needs one to fetch the distribution certificate; with
+ * none it fails with "No Accounts" (and a misleading "No signing certificate" next
+ * to it). The list lives under DVTDeveloperAccountManagerAppleIDLists as a dict of
+ * lists — one keyed by identifier objects, one by plain strings — so count every
+ * entry of every list. Sessions expire and an Xcode update can drop them, which is
+ * why `doctor` checks this before a seven-minute archive does.
+ */
+export function parseXcodeAccounts(json: string | undefined): string[] {
+  if (!json) return []
+  try {
+    const lists = JSON.parse(json) as Record<string, unknown>
+    const out: string[] = []
+    for (const v of Object.values(lists)) {
+      if (!Array.isArray(v)) continue
+      for (const e of v) {
+        if (typeof e === 'string') out.push(e)
+        else if (e && typeof e === 'object' && typeof (e as { identifier?: unknown }).identifier === 'string') out.push((e as { identifier: string }).identifier)
+      }
+    }
+    return [...new Set(out)]
+  } catch {
+    return []
+  }
+}
+
+export function xcodeAccounts(): string[] {
+  const plist = join(process.env.HOME ?? '', 'Library/Preferences/com.apple.dt.Xcode.plist')
+  return parseXcodeAccounts(capture('plutil', ['-extract', 'DVTDeveloperAccountManagerAppleIDLists', 'json', '-o', '-', plist]))
+}
+
 /** project.pbxproj next to the workspace, if there is exactly one .xcodeproj. */
 function pbxprojFor(p: Project): { text: string; infoPlistRel: string } | undefined {
   const iosDir = dirname(p.workspace)

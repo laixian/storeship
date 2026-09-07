@@ -92,7 +92,14 @@ npx storeship release 1.0.0 --date 2026-10-01
 
 先打印计划问一句，然后：预检 → `xcodebuild archive` → `xcodebuild -exportArchive`（**不带** API 密钥：带了 Xcode 会走云签名，报一句误导性的「没有发布证书」）→ `altool --upload-app`（这一步才带密钥）→ 没有版本记录就建 → 写 What's New → 等构建处理完（通常 5 到 20 分钟）挂上 → 提审。
 
-每一步都幂等。失败了读报错下面那行提示，修完原样重跑。构建是用别的方式传的（Xcode Organizer、CI）就加 `--no-ship`；想停在提审之前加 `--no-submit`，之后再 `npx storeship version submit 1.0.0`。
+每一步都幂等。失败了读报错下面那行提示，修完原样重跑。构建是用别的方式传的（Xcode Organizer、CI）就加 `--no-ship`（并用 `--build <N>` 点名）；想停在提审之前加 `--no-submit`，之后再 `npx storeship version submit 1.0.0`。
+
+两个续跑点，最好在用到之前就知道：
+
+- **归档成功、导出失败**（多半是 `No Accounts`：Xcode 里没登 Apple ID，去 Xcode → Settings → Accounts）。登回去之后 `npx storeship release 1.0.0 --date … --archive "<路径>.xcarchive"`，不必重新归档。`doctor` 会提前查账号，正常情况下碰不到。
+- **上传刚完就挂构建、报 409**：新构建要几分钟才出现在列表里，工具会等它刚构建的那个号。手工挂要点名：`npx storeship version attach 1.0.0 --build <N> --wait`。
+
+让 agent 替你跑的话，先给它加一次允许规则（见 README →「给 agent」）；不然 `release` 这一整条常被拒，而它的每一步单看都会放行。
 
 ## 8. 提审之后
 

@@ -19,15 +19,26 @@ You drive `storeship` (run as `npx storeship …`, or `pnpm storeship …` in a 
 - **What's New text.** Draft it if asked, from the git log since the last tag, but show it before writing it. Files go to `<whatsNew.dir>/<version>/<locale>.txt`, one per configured locale.
 - **Cancelling a submission.** Never run `version cancel` on your own initiative. It forfeits the review queue position, and a re-submit can be blocked by account-level checks that only appear at submit time.
 
-## The normal path
+## The normal path: two commands, not one
 
 ```bash
-storeship release <version> --date <YYYY-MM-DD> --yes --json
+storeship ship --json                                   # preflight → archive → export → upload
+storeship release <version> --date <YYYY-MM-DD> --no-ship --yes --json   # create → What's New → attach → submit
 ```
 
-This does preflight → archive → export → upload → create version → What's New → attach (waits for the build to be VALID, usually 5–20 minutes) → submit. Each step is idempotent: on failure, read the hint, fix, and run the same command again. `--no-submit` stops before review; `--no-ship` skips the build when the IPA is already uploaded.
+`release` alone does all of it, but run it as two steps: the first is the slow, local, high-impact one (xcodebuild + an upload), the second is a handful of App Store Connect writes. If the harness you run in denies one big command, it usually allows the halves — and if `ship` is denied, hand exactly that command to the human and continue with the second half yourself once the build is up.
 
-If the build was uploaded some other way (Xcode Organizer, CI), use `--no-ship`.
+Every step is idempotent: on failure, read the hint, fix, and run the same command again. Resume points:
+
+- Archive succeeded, export or upload failed → `storeship release <version> --archive <path.xcarchive> …` (or `storeship export <path.xcarchive>` then `storeship upload <ipa>`). Do not archive again; it takes minutes.
+- Build uploaded some other way (Xcode Organizer, CI) → `--no-ship`, and name it: `--build <N>`.
+- `--no-submit` stops before review; `storeship version submit <version>` later.
+
+Permission rules the human can add so none of this prompts (Claude Code, `.claude/settings.local.json`):
+
+```json
+{ "permissions": { "allow": ["Bash(pnpm storeship *)", "Bash(npx storeship *)"] } }
+```
 
 ## Store metadata
 
@@ -39,8 +50,9 @@ If the build was uploaded some other way (Xcode Organizer, CI), use `--no-ship`.
 ## Reading failures
 
 - `preflight` errors: prebuild forgotten, or the version you asked for is not what `ios/` contains.
-- Export failing with "No signing certificate iOS Distribution": do **not** go looking for certificates; the hint explains cloud signing. If you ran `xcodebuild` by hand, remove the `-authenticationKey*` flags.
-- `attach` not VALID: wait, do not re-upload.
+- Export failing with `No Accounts`: Xcode has no Apple ID signed in. That is a GUI action (Xcode → Settings → Accounts) — ask the human, then resume with `--archive`. `doctor` reports it as `Xcode account` before you spend minutes archiving.
+- Export failing with "No signing certificate iOS Distribution" **without** `No Accounts`: do **not** go looking for certificates; the hint explains cloud signing. If you ran `xcodebuild` by hand, remove the `-authenticationKey*` flags.
+- `attach` 409 "pre-release build could not be added": either the build is still processing, or an older build was picked because the new one is not listed yet. Name it: `storeship version attach <version> --build <N> --wait`. Never re-upload.
 - `submit` failing with `STATE_ERROR`: read `associatedErrors` in the message; it is often an account-level issue (e.g. ICP filing in China) that no command can fix.
 
 ## Never
