@@ -5,6 +5,7 @@
  * Command tree lives in ./commands; this file only parses, dispatches, and
  * turns errors into "message + hint" on stderr with a non-zero exit.
  */
+import { createRequire } from 'node:module'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Args, parseArgs } from './args.ts'
@@ -29,7 +30,8 @@ import { simCommand } from './commands/sim.ts'
 import { buildsCommand, versionCommand } from './commands/version.ts'
 
 export const NAME = 'storeship'
-export const VERSION = '0.1.0'
+// Read at run time so `npm version` is the only place the number lives; src/ and dist/ both sit one level under the package root.
+export const VERSION: string = (createRequire(import.meta.url)('../package.json') as { version: string }).version
 
 const COMMANDS: Command[] = [
   initCommand,
