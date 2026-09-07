@@ -34,8 +34,8 @@ export const HINTS: Hint[] = [
   {
     test: /No Accounts/,
     hint:
-      'xcodebuild cannot see an Apple ID signed into Xcode, so -allowProvisioningUpdates cannot fetch the distribution certificate. ' +
-      'Run this from a normal Terminal session as the user who is signed in (Xcode → Settings → Accounts); sandboxed or automation shells do not reach that account. ' +
+      'Xcode has no Apple ID signed in, so -allowProvisioningUpdates cannot fetch the distribution certificate (the "No signing certificate" line next to it is a consequence, not the cause). ' +
+      'Open Xcode → Settings → Accounts and sign in with the developer account (sessions expire; an Xcode update can drop it), then rerun. ' +
       'The archive itself is fine — resume with `storeship export <path.xcarchive>` or `storeship release <version> --archive <path.xcarchive>`.',
   },
   {
