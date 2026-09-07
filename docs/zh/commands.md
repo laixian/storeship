@@ -18,7 +18,7 @@
 - [`release`](#release) — 整条链：ship + 建版本 + What's New + 等构建挂上 + 提审
 - [`version`](#version) — App Store 版本记录：状态、创建、What's New、挂构建、提审、撤回
 - [`builds`](#builds) — 最近的构建及其处理状态
-- [`listing`](#listing) — 商店文案以 Markdown 为真相源：查上限、和 ASC 对账、写入
+- [`listing`](#listing) — 商店文案和审核信息以 Markdown 为真相源：查上限、和 ASC 对账、写入
 - [`media`](#media) — 截图与预览视频：按语言 × 设备档看状态、上传、建槽位
 - [`offer`](#offer) — 订阅优惠码（App Store Connect 网页里没有入口）
 - [`device`](#device) — 注册真机（装开发签名的包要用）
@@ -173,7 +173,7 @@ App Store 版本记录：状态、创建、What's New、挂构建、提审、撤
 
 ## `listing`
 
-商店文案以 Markdown 为真相源：查上限、和 ASC 对账、写入
+商店文案和审核信息以 Markdown 为真相源：查上限、和 ASC 对账、写入
 
 子命令: [`check`](#listing-check) · [`diff`](#listing-diff) · [`push`](#listing-push)
 
@@ -191,7 +191,7 @@ App Store 版本记录：状态、创建、What's New、挂构建、提审、撤
 
 ### `listing push`
 
-把有差异的字段写进 ASC（名称 / 副标题在 appInfo 上，其余在版本上）
+把有差异的字段写进 ASC（名称 / 副标题在 appInfo 上，其余字段和审核信息在版本上）
 
 用法: `storeship listing push <version>`
 

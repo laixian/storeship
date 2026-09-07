@@ -48,7 +48,29 @@ Up to 4000 characters. A fenced block is taken verbatim.
 ```
 ### promotionalText
 Up to 170 characters; the only field editable while live.
+
+## review
+### notes
 ```
+How a reviewer reaches every feature on one device, what each permission
+is for, where the paywall is. Up to 4000 characters. This is the field
+that decides most rejections.
+```
+### contactFirstName
+Ada
+### contactLastName
+Lovelace
+### contactPhone
++1 555 0100
+### contactEmail
+ada@example.com
+### demoAccountName
+reviewer@example.com        (leave the field out if there is no sign-in)
+### demoAccountRequired
+true
+```
+
+The demo password goes in the environment (`ASC_DEMO_PASSWORD`), never in the file.
 
 `npx storeship listing check` validates the limits offline. Name and subtitle live on the app; keywords, description and promotional text live on each version, so the version record has to exist before you can diff or push (step 6).
 

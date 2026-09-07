@@ -59,6 +59,7 @@ skills/*            给 agent 的操作规程（Claude Code SKILL.md 格式）�
 | 17 | **`--json` 全命令支持**，进度走 stderr | agent 不刮屏幕；`Out.emit` 收数据、`finish` 一次打出；`note()` 永远到 stderr |
 | 18 | **CLI 文案英文，本文与 od-mobile 侧文档中文** | 面向开源受众；od-mobile 的接手者仍按仓库惯例读中文 |
 | 19 | **Android / Google Play 明确不在范围** | 仓库里没有任何积累；README 写明只做 iOS 比做一半好 |
+| 20 | **审核信息（备注 / 联系人 / 演示账号）是 `listing.md` 的 `## review` 一节**，走同一套 diff / push；演示密码只从 `ASC_DEMO_PASSWORD` 来 | 2026-09-08 X 上一位用户的反馈：「到等待审核从来不是难点，难的是之后 Apple 要的那些」。ASC API 有 `appStoreReviewDetails`（每版一条，新版本自动带上一版的），正好和文案即代码同一个形状。od-mobile 迁移时当场抓到文档和 ASC 已分叉（「智能扒谱」vs「分轨练习」）。密码 API 写了不回读，没法 diff，所以「设了就每次写」比「猜要不要写」诚实；对账时去掉备注尾部换行——ASC 网页编辑器会留一个 |
 
 ## 4. 从 od-mobile 抽出来时改掉的硬编码
 

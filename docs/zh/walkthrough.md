@@ -48,7 +48,28 @@ npx expo prebuild
 ```
 ### promotionalText
 最多 170 字；上线之后唯一能随时改的一格。
+
+## review
+### notes
 ```
+审核员怎么在一台设备上走到每个功能、每个权限是干什么的、付费墙在哪。
+最多 4000 字。被打回的理由多半出在这一格。
+```
+### contactFirstName
+Ada
+### contactLastName
+Lovelace
+### contactPhone
++1 555 0100
+### contactEmail
+ada@example.com
+### demoAccountName
+reviewer@example.com        （不需要登录就不写这一格）
+### demoAccountRequired
+true
+```
+
+演示账号的密码放环境变量 `ASC_DEMO_PASSWORD`，永远不进文件。
 
 `npx storeship listing check` 离线查上限。名称 / 副标题挂在 App 上，关键词 / 描述 / 促销文本挂在每个版本上，所以要先有版本记录才能 diff 和 push（第 6 步）。
 

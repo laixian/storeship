@@ -4,6 +4,7 @@ import { describe, it } from 'node:test'
 import { createClient } from '../src/asc/client.ts'
 import { attachLatestBuild, createVersion, submitVersion } from '../src/asc/versions.ts'
 import { uploadMedia } from '../src/asc/media.ts'
+import { diffReview, pushReview } from '../src/asc/listing.ts'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -145,5 +146,37 @@ describe('media upload', () => {
     assert.equal(puts[0]!.h['X-A'], '1')
     assert.equal(commit.data.attributes.sourceFileChecksum, createHash('md5').update(bytes).digest('hex'))
     assert.equal(commit.data.attributes.uploaded, true)
+  })
+})
+
+describe('review detail', () => {
+  it('PATCHes an existing record with only the differing fields', async () => {
+    let patched: any
+    const { client } = fake({
+      'GET /v1/appStoreVersions/v1/appStoreReviewDetail': () => ({ data: { id: 'rd1', type: 'appStoreReviewDetails', attributes: { notes: 'old', contactEmail: 'a@b.c', demoAccountRequired: false } } }),
+      'PATCH /v1/appStoreReviewDetails/rd1': (_u, init) => {
+        patched = JSON.parse(init!.body as string)
+        return {}
+      },
+    })
+    const st = await diffReview(client, 'v1', { notes: 'new', contactEmail: 'a@b.c', demoAccountRequired: 'true' }, {})
+    assert.equal(st.detailId, 'rd1')
+    assert.deepEqual(await pushReview(client, 'v1', st), ['notes', 'demoAccountRequired'])
+    assert.deepEqual(patched, { data: { type: 'appStoreReviewDetails', id: 'rd1', attributes: { notes: 'new', demoAccountRequired: true } } })
+  })
+  it('POSTs a new record linked to the version when there is none, including the env password', async () => {
+    let posted: any
+    const { client } = fake({
+      'GET /v1/appStoreVersions/v1/appStoreReviewDetail': () => ({ data: null }),
+      'POST /v1/appStoreReviewDetails': (_u, init) => {
+        posted = JSON.parse(init!.body as string)
+        return { data: { id: 'rd2' } }
+      },
+    })
+    const st = await diffReview(client, 'v1', { notes: 'n', demoAccountName: 'demo' }, { ASC_DEMO_PASSWORD: 'pw' })
+    assert.equal(st.detailId, undefined)
+    assert.deepEqual(await pushReview(client, 'v1', st), ['notes', 'demoAccountName', 'demoAccountPassword'])
+    assert.deepEqual(posted.data.relationships, { appStoreVersion: { data: { type: 'appStoreVersions', id: 'v1' } } })
+    assert.deepEqual(posted.data.attributes, { notes: 'n', demoAccountName: 'demo', demoAccountPassword: 'pw' })
   })
 })

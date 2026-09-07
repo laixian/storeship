@@ -34,6 +34,35 @@
  * description / promotionalText are on **appStoreVersion** (per version).
  * ⚠️ An account has two appInfos once an app is live: the live one is
  * locked; writing to it gives a 409 that does not say which one you hit.
+ *
+ * ## App Review information
+ *
+ * A `## review` section (not a locale) holds what App Review asks for after
+ * "Waiting for Review": the notes, the contact, the demo account. It maps to
+ * one `appStoreReviewDetails` record per version (ASC copies the previous
+ * version's into a new one, so the diff is usually empty). The demo password
+ * is never in the file: it comes from `ASC_DEMO_PASSWORD` and, being
+ * write-only in the API, is pushed whenever that variable is set.
+ *
+ * ```markdown
+ * ## review
+ * ### notes
+ * ```
+ * How to reach every feature on one device…
+ * ```
+ * ### contactFirstName
+ * Ada
+ * ### contactLastName
+ * Lovelace
+ * ### contactPhone
+ * +1 555 0100
+ * ### contactEmail
+ * ada@example.com
+ * ### demoAccountName
+ * reviewer@example.com
+ * ### demoAccountRequired
+ * true
+ * ```
  */
 import { readFileSync } from 'node:fs'
 import { type AscClient, ok } from './client.ts'
@@ -53,12 +82,33 @@ export const LIMITS: Record<Field, number> = {
   promotionalText: 170,
 }
 
+export const REVIEW_FIELDS = ['notes', 'contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail', 'demoAccountName', 'demoAccountRequired'] as const
+export type ReviewField = (typeof REVIEW_FIELDS)[number]
+/** Values as written in the file; `demoAccountRequired` is "true" / "false". */
+export type Review = Partial<Record<ReviewField, string>>
+export const REVIEW_LIMITS: Partial<Record<ReviewField, number>> = { notes: 4000 }
+export const DEMO_PASSWORD_ENV = 'ASC_DEMO_PASSWORD'
+
 export const INFO_FIELDS: Field[] = ['name', 'subtitle']
 export const VERSION_FIELDS: Field[] = ['keywords', 'description', 'promotionalText']
 
 export const len = (s: string): number => [...s].length
 
 const LOCALE_RE = /^[a-z]{2,3}(?:-[A-Za-z]{2,8})?$/
+const REVIEW_HEADING = /^review$/i
+const REVIEW_ALIASES: Record<string, ReviewField> = Object.fromEntries([
+  ...REVIEW_FIELDS.map((f) => [f.toLowerCase(), f]),
+  ['contact-first-name', 'contactFirstName'],
+  ['contact-last-name', 'contactLastName'],
+  ['contact-phone', 'contactPhone'],
+  ['contact-email', 'contactEmail'],
+  ['demo-account-name', 'demoAccountName'],
+  ['demo-account-required', 'demoAccountRequired'],
+  ['firstname', 'contactFirstName'],
+  ['lastname', 'contactLastName'],
+  ['phone', 'contactPhone'],
+  ['email', 'contactEmail'],
+]) as Record<string, ReviewField>
 const ALIASES: Record<string, Field> = {
   name: 'name',
   subtitle: 'subtitle',
@@ -76,13 +126,25 @@ function unfence(raw: string): string {
   return m ? m[1]! : t
 }
 
-export function parseListing(md: string, where = 'listing'): Record<string, Listing> {
-  const out: Record<string, Listing> = {}
-  let locale: string | undefined
-  let field: Field | undefined
+export type Parsed = { locales: Record<string, Listing>; review?: Review }
+
+/**
+ * One pass over the file. A `##` heading that is a locale code opens a locale;
+ * `## review` opens the review section; any other `##` is prose. `###` under a
+ * locale must be a listing field, under `review` a review field.
+ */
+export function parseSections(md: string, where = 'listing'): Parsed {
+  const locales: Record<string, Listing> = {}
+  let review: Review | undefined
+  let section: { kind: 'locale'; locale: string } | { kind: 'review' } | undefined
+  let field: Field | ReviewField | undefined
   let buf: string[] = []
   const flush = (): void => {
-    if (locale && field) out[locale]![field] = unfence(buf.join('\n'))
+    if (section && field) {
+      const value = unfence(buf.join('\n'))
+      if (section.kind === 'locale') locales[section.locale]![field as Field] = value
+      else (review ??= {})[field as ReviewField] = value
+    }
     buf = []
   }
   const lines = md.split(/\r?\n/)
@@ -95,37 +157,62 @@ export function parseListing(md: string, where = 'listing'): Record<string, List
       const h3 = /^###\s+(\S+)/.exec(line)
       if (h3 && !line.startsWith('####')) {
         flush()
-        if (!locale) throw new StoreshipError(`${where}:${i + 1}: "### ${h3[1]}" appears before any "## <locale>" heading`)
-        const f = ALIASES[h3[1]!.toLowerCase()]
-        if (!f) throw new StoreshipError(`${where}:${i + 1}: unknown field "${h3[1]}"`, `fields are: ${FIELDS.join(', ')}`)
-        field = f
+        if (!section) throw new StoreshipError(`${where}:${i + 1}: "### ${h3[1]}" appears before any "## <locale>" or "## review" heading`)
+        const key = h3[1]!.toLowerCase()
+        if (section.kind === 'locale') {
+          const f = ALIASES[key]
+          if (!f) throw new StoreshipError(`${where}:${i + 1}: unknown field "${h3[1]}"`, `fields are: ${FIELDS.join(', ')}`)
+          field = f
+        } else {
+          const f = REVIEW_ALIASES[key]
+          if (!f) throw new StoreshipError(`${where}:${i + 1}: unknown review field "${h3[1]}"`, `review fields are: ${REVIEW_FIELDS.join(', ')} (the demo password comes from ${DEMO_PASSWORD_ENV})`)
+          field = f
+        }
         continue
       }
       if (h2 && !line.startsWith('###')) {
         flush()
         field = undefined
         if (LOCALE_RE.test(h2[1]!)) {
-          locale = h2[1]!
-          out[locale] ??= {}
-        } else locale = undefined
+          section = { kind: 'locale', locale: h2[1]! }
+          locales[h2[1]!] ??= {}
+        } else if (REVIEW_HEADING.test(h2[1]!)) {
+          section = { kind: 'review' }
+          review ??= {}
+        } else section = undefined
         continue
       }
     }
-    if (locale && field) buf.push(line)
+    if (section && field) buf.push(line)
   }
   flush()
-  if (!Object.keys(out).length) throw new StoreshipError(`${where}: no "## <locale>" sections found`, 'see the format in the storeship README (Store listing)')
-  return out
+  if (!Object.keys(locales).length) throw new StoreshipError(`${where}: no "## <locale>" sections found`, 'see the format in the storeship README (Store listing)')
+  if (review?.demoAccountRequired !== undefined && !/^(true|false|yes|no)$/i.test(review.demoAccountRequired))
+    throw new StoreshipError(`${where}: demoAccountRequired must be true or false, got "${review.demoAccountRequired}"`)
+  return { locales, review }
 }
 
-export function readListing(file: string): Record<string, Listing> {
+/** The locale sections only (the shape every listing command used before `## review` existed). */
+export function parseListing(md: string, where = 'listing'): Record<string, Listing> {
+  return parseSections(md, where).locales
+}
+
+export function readListingFile(file: string): Parsed {
   let md: string
   try {
     md = readFileSync(file, 'utf8')
   } catch {
     throw new StoreshipError(`listing file not found: ${file}`, 'set listing.file in storeship.config.json')
   }
-  return parseListing(md, file)
+  return parseSections(md, file)
+}
+
+export function readListing(file: string): Record<string, Listing> {
+  return readListingFile(file).locales
+}
+
+export function overLimitReview(r: Review): string[] {
+  return (Object.keys(REVIEW_LIMITS) as ReviewField[]).filter((k) => r[k] !== undefined && len(r[k]!) > REVIEW_LIMITS[k]!).map((k) => `${k} ${len(r[k]!)}/${REVIEW_LIMITS[k]}`)
 }
 
 /** Over-limit fields, formatted; empty = compliant. */
@@ -195,4 +282,45 @@ export async function pushListing(c: AscClient, diffs: FieldDiff[]): Promise<{ l
     out.push({ locale, target, fields: group.map((d) => d.field) })
   }
   return out
+}
+
+export type ReviewDiff = { field: ReviewField | 'demoAccountPassword'; current: string; wanted: string; same: boolean }
+export type ReviewState = { detailId?: string; diffs: ReviewDiff[] }
+
+const bool = (s: string): boolean => /^(true|yes)$/i.test(s)
+
+/** Pure: compare the file's review section with the record ASC returned (attributes, or nothing). */
+export function diffReviewFields(wanted: Review, current: Record<string, unknown> | undefined, password: string | undefined): ReviewDiff[] {
+  const diffs: ReviewDiff[] = REVIEW_FIELDS.filter((f) => wanted[f] !== undefined).map((f) => {
+    const raw = current?.[f]
+    // ASC's web editor leaves a trailing newline on notes; a fenced block never has one. Not a difference.
+    const cur = f === 'demoAccountRequired' ? String(raw ?? false) : String(raw ?? '').trimEnd()
+    const want = f === 'demoAccountRequired' ? String(bool(wanted[f]!)) : wanted[f]!.trimEnd()
+    return { field: f, current: cur, wanted: want, same: cur === want }
+  })
+  // The API never returns the password, so it cannot be compared; when the
+  // variable is set it is pushed every time (idempotent, and the only way to rotate it).
+  if (password !== undefined && (wanted.demoAccountName ?? current?.demoAccountName)) diffs.push({ field: 'demoAccountPassword', current: '(write-only)', wanted: password, same: false })
+  return diffs
+}
+
+export async function diffReview(c: AscClient, versionId: string, wanted: Review, env: Record<string, string | undefined> = process.env): Promise<ReviewState> {
+  const over = overLimitReview(wanted)
+  if (over.length) throw new StoreshipError(`review exceeds App Store limits: ${over.join(', ')}`, 'shorten the notes; nothing was written')
+  const r = ok(await c.get(`/v1/appStoreVersions/${versionId}/appStoreReviewDetail`), 'read review detail')
+  const d = r.json?.data
+  return { detailId: d?.id, diffs: diffReviewFields(wanted, d?.attributes, env[DEMO_PASSWORD_ENV]) }
+}
+
+/** One PATCH (or one POST when the version has no record yet) with every differing field. */
+export async function pushReview(c: AscClient, versionId: string, state: ReviewState): Promise<ReviewDiff['field'][]> {
+  const changed = state.diffs.filter((d) => !d.same)
+  if (!changed.length) return []
+  const attributes: Record<string, unknown> = Object.fromEntries(changed.map((d) => [d.field, d.field === 'demoAccountRequired' ? bool(d.wanted) : d.wanted]))
+  if (state.detailId) {
+    ok(await c.patch(`/v1/appStoreReviewDetails/${state.detailId}`, { data: { type: 'appStoreReviewDetails', id: state.detailId, attributes } }), 'write review detail')
+  } else {
+    ok(await c.post('/v1/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes, relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: versionId } } } } }), 'create review detail')
+  }
+  return changed.map((d) => d.field)
 }

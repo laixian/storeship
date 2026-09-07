@@ -45,6 +45,7 @@ Permission rules the human can add so none of this prompts (Claude Code, `.claud
 - `storeship listing check` — offline; parse and limits.
 - `storeship listing diff <version> --json` — what differs from App Store Connect. Show the human the diff.
 - `storeship listing push <version>` — only after the human agrees. Name/subtitle need a version in preparation; a `409` there means the locked live appInfo was hit.
+- App Review information (notes, contact, demo account) is the `## review` section of the same file and rides on the same diff/push. When drafting review notes, write how a reviewer reaches every feature on one device, what each permission is for, and where the paywall is — most rejections come from this field. The demo password is `ASC_DEMO_PASSWORD` in the environment; never put it in the file.
 - Screenshots and previews are inherited from the previous version. Only upload what changed: `storeship media status <version> --json` for the set ids, then `storeship media upload screenshot <setId> <files…>` in display order.
 
 ## Reading failures
