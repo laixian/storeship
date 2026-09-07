@@ -18,6 +18,8 @@ npx storeship doctor
 
 `init` 从 `expo config` 读 bundle id 和 team id，向 App Store Connect 查 app id 和已有语言，写出 `storeship.config.json`。`doctor` 把后面每一步要用的东西逐项检查，缺什么说怎么补。配置文件提交进仓库，里面只有标识符。
 
+要让 Claude Code 一起干的话，再 `npx storeship skill install`（把四个 skill 拷进 `.claude/skills/`），并加上 README「给 agent」里那一条权限规则。
+
 ## 2. 定版本号、生成原生工程
 
 版本号是判断，工具不替你改。改 `app.config.*` 里的 `version`（用户看到的）和 `ios.buildNumber`（每次上传都要递增，同一版本重传也是）。然后：
