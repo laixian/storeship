@@ -16,6 +16,7 @@
 - [`export`](#export) — 把一个已有的 .xcarchive 导出成 IPA（归档成功、导出失败之后从这里接着走）
 - [`upload`](#upload) — 用 altool 上传一个已导出的 IPA
 - [`release`](#release) — 整条链：ship + 建版本 + What's New + 等构建挂上 + 提审
+- [`products`](#products) — 订阅组 / 订阅 / 定价 / 可售地区 / App 定价，以 products.md 为真相源：查、对账、写入
 - [`version`](#version) — App Store 版本记录：状态、创建、What's New、挂构建、提审、撤回
 - [`builds`](#builds) — 最近的构建及其处理状态
 - [`listing`](#listing) — 商店文案和审核信息以 Markdown 为真相源：查上限、和 ASC 对账、写入
@@ -102,6 +103,60 @@
 | `--quiet` | 不回显 xcodebuild / altool 的输出 |
 | `--force` | app.config 和 ios/ 的版本号不一致时也照样构建 |
 | `--timeout` | 等构建变 VALID 的分钟数；默认 40 |
+
+## `products`
+
+订阅组 / 订阅 / 定价 / 可售地区 / App 定价，以 products.md 为真相源：查、对账、写入
+
+子命令: [`check`](#products-check) · [`status`](#products-status) · [`diff`](#products-diff) · [`push`](#products-push) · [`pricepoints`](#products-pricepoints) · [`delete`](#products-delete)
+
+### `products check`
+
+解析 products.md 并离线检查上限与引用
+
+用法: `storeship products check`
+
+### `products status`
+
+打印 ASC 上现有的组、订阅、状态、基准地区价、地区数、审核截图
+
+用法: `storeship products status`
+
+### `products diff`
+
+products.md 与 ASC 逐项比较，打印要做的每一步；不写
+
+用法: `storeship products diff`
+
+### `products push`
+
+按 diff 的计划写入：建组 / 建订阅 / 语言 / 价格（基准地区等价到全部地区）/ 可售地区 / 审核截图
+
+用法: `storeship products push [--yes]`
+
+| 参数 | |
+|---|---|
+| `--yes` | 不问确认（不在终端里跑时必须给） |
+
+### `products pricepoints`
+
+列出某订阅在某地区的价格档位（Apple 的档位是离散的，写价格前先看）
+
+用法: `storeship products pricepoints <productId> <TERRITORY> [--near AMOUNT]`
+
+| 参数 | |
+|---|---|
+| `--near` | 只列这个数附近的档 |
+
+### `products delete`
+
+删掉一个从未提交过的订阅（ASC 只允许删这种）；组空了也一起删
+
+用法: `storeship products delete <productId> --yes`
+
+| 参数 | |
+|---|---|
+| `--yes` | 必须给：删了就没了 |
 
 ## `version`
 

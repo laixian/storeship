@@ -47,6 +47,12 @@ export const HINTS: Hint[] = [
       'storeship never passes them. If you ran xcodebuild by hand, drop those three flags and keep only -allowProvisioningUpdates: Xcode creates the distribution certificate at export time, so it is expected that you cannot find one beforehand.',
   },
   {
+    test: /An error occurred while processing the pricing information/i,
+    hint:
+      'Apple says nothing more, but two things cause it: the subscription has no availability yet (territories must be set before any price — `storeship products push` does that first), ' +
+      'or the price point is not one of that subscription\'s tiers (`storeship products pricepoints <productId> <TERRITORY>`).',
+  },
+  {
     test: /ENTITY_STATE_INVALID|not in an editable state|STATE_ERROR/,
     hint:
       'The version is read-only in its current state (waiting for review / in review). `storeship version cancel` unlocks it, at the cost of the review queue position. ' +

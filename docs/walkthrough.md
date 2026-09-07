@@ -74,6 +74,19 @@ The demo password goes in the environment (`ASC_DEMO_PASSWORD`), never in the fi
 
 `npx storeship listing check` validates the limits offline. Name and subtitle live on the app; keywords, description and promotional text live on each version, so the version record has to exist before you can diff or push (step 6).
 
+## 3b. Subscriptions and pricing (paid apps)
+
+Write `products.md` (path: `catalog.file`): the group, each subscription with its period, level, base price and localized name / description, and `## app` for the app's own price (format in README → *Products as code*). Then:
+
+```bash
+npx storeship products check                   # limits and references, offline
+npx storeship products pricepoints com.example.pro.monthly USA --near 4   # the tiers Apple offers
+npx storeship products diff                    # every change it would make
+npx storeship products push                    # create / update; never deletes
+```
+
+The first subscription is submitted for review together with the app version (step 7), not on its own. The App Store Connect app record itself is the one thing no command creates: make it on the website first.
+
 ## 4. Screenshots
 
 Every device family you support needs a set (6.9" iPhone at least; 13" iPad when `supportsTablet`). Screenshots come from the simulator and are composed onto a canvas with a title.

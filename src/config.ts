@@ -39,6 +39,8 @@ export type RawConfig = {
     expo?: boolean
   }
   listing?: { file?: string }
+  /** Products as code: subscription groups, subscriptions, prices, availability, app price. */
+  catalog?: { file?: string }
   whatsNew?: { dir?: string }
   release?: {
     /** Time of day + UTC offset used for scheduled releases, e.g. "08:00:00-07:00". */
@@ -96,6 +98,7 @@ export type Config = {
     expo?: boolean
   }
   listing: { file: string }
+  catalog: { file: string }
   whatsNew: { dir: string }
   release: { scheduledTime: string }
   products: Record<string, string>
@@ -179,6 +182,7 @@ export function resolveConfig(
       expo: raw.ios?.expo,
     },
     listing: { file: rel(root, raw.listing?.file) ?? resolve(root, 'store-listing.md') },
+    catalog: { file: rel(root, raw.catalog?.file) ?? resolve(root, 'products.md') },
     whatsNew: { dir: rel(root, raw.whatsNew?.dir) ?? resolve(root, 'whats-new') },
     release: { scheduledTime: raw.release?.scheduledTime ?? '00:00:00Z' },
     products: raw.products ?? {},

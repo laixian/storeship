@@ -164,18 +164,18 @@ ASC API **没有** `POST /v1/apps`——App 记录（名称、bundle id、SKU、
 | `subscriptionPricePoints` | 每地区约 800 档，`customerPrice` / `proceeds` | 只读；id 里编码了 (订阅, 地区, 档) |
 | `subscriptionPricePoints/{id}/equalizations` | **一个基准档在其他 174 个地区的等价档** | 网页上「按基准地区自动生成其他地区价格」就是它 |
 | `subscriptionPrices` | 每地区一条，指向一个价格点；`startDate`（null = 现在）、`preserved` | 改价 = 再 POST 一条新的（带 startDate 就是排期） |
-| `subscriptionAvailability` | `availableInNewTerritories` + 175 个地区 | 默认全开 |
-| `subscriptionAppStoreReviewScreenshots` | 一张，md5 在 `sourceFileChecksum` | 和截图同一套 reserve / PUT / commit |
+| `subscriptionAvailability` | `availableInNewTerritories` + 175 个地区 | 默认全开。⚠️ **漏了它的症状是 sandbox 永远取不到价格且不报错**（od-mobile 2026-08-18），所以新建订阅时 push 一定写它 |
+| `subscriptionAppStoreReviewScreenshots` | 一张，md5 在 `sourceFileChecksum` | 和截图同一套 reserve / PUT / commit。⚠️ **这格只认 1242×2208**（od-mobile 2026-08-18：1290×2796 被拒，缩放 + 补边一次过） |
 | `appPriceSchedules` | `baseTerritory` + `manualPrices`（指向 `appPricePoints`） | od-mobile 是免费：CHN 基准、价格点 0.0 |
 | `appAvailabilities`（v2） | `availableInNewTerritories` + `territoryAvailabilities` | 这些 v2 端点**不接受 `limit`**（400 PARAMETER_ERROR.ILLEGAL） |
 
-### 7.3 文件格式：`products.md`（路径 `products.file`，默认 `store/products.md`）
+### 7.3 文件格式：`products.md`（路径 `catalog.file`，默认 `products.md`；`products` 这个配置键已被 `offer` 的别名表占用）
 
 ```markdown
 # Products
 
 ## app
-- price: CNY 0                 # 基准地区 + 价格；0 = 免费
+- price: CHN 0                 # 基准地区 + 价格；0 = 免费
 - territories: all             # 或逗号分隔的地区码
 
 ## group OverDrive Pro          # 订阅组，值是 referenceName
@@ -192,7 +192,7 @@ OverDrive Pro会员
 - period: ONE_MONTH
 - level: 1                     # 组内档位，1 最高
 - familySharable: false
-- price: USD 3.99              # 基准地区 + 价格；其余地区按 Apple 的等价表
+- price: USA 3.99              # 基准地区 + 价格；其余地区按 Apple 的等价表
 - territories: all
 ### en-US
 #### name
@@ -227,9 +227,16 @@ docs/appstore/iap/monthly.png
 | 28 | **提交不在这里**：新订阅随 App 版本一起 `version submit` | Apple 规定首个订阅必须和一个新版本一起提审。⚠️ **待验证**：API 里版本提交是否自动带上 READY_TO_SUBMIT 的订阅，还是要在 reviewSubmissionItems 里挂——只能在下一次真发版时看 |
 | 29 | **0.2 不做**：入门 / 促销 / 赢回优惠、非订阅型 IAP、Bundle ID | 优惠码已有 `offer`；其余等有真实需求再做，先把「组 + 订阅 + 定价 + 地区 + 截图」这条主干走通 |
 | 30 | **`products status` 只读打印 ASC 现状**（组、订阅、状态、基准地区价、地区数、截图有无） | 和 `version status` 同一个作用：先看再改 |
+| 31 | **可售地区先于价格**，价格写入按地区幂等（已在目标档的跳过） | 2026-09-08 写路径实测：新订阅没设 availability 之前，任何 `subscriptionPrices` POST 都是 409，Apple 只说 "An error occurred while processing the pricing information"；设完当场 201。同一句报错的另一个原因是档位不属于这个订阅。`hints.ts` 认这句。价格 POST 的最小形状是 subscription + subscriptionPricePoint 两条关系，不带 territory、不带 preserveCurrentPrice |
+| 32 | **列订阅时不 `include=subscriptionAvailability`**，to-one 记录逐个读并容忍 404 | 刚建、没设地区的订阅会让整个列表 404（"no resource of type subscriptionAvailabilities"），读现状的命令就全挂了 |
+| 33 | **价格写地区码不写货币**（`USA 3.99`，不是 `USD`） | 我自己第一次就写成 USD；Apple 全部按地区（ISO 3166 alpha-3）。解析器认出常见货币码直接给出对应地区 |
 
-### 7.5 验证计划
+### 7.5 验证（2026-09-08 全部做完）
 
-- **读路径**：od-mobile 的 `products.md` 照现状写（一组两订阅 + 免费 App），`products diff` 必须是空的。这是解析器和字段映射的合同。
-- **写路径**：在 od-mobile 的账号里建一个一次性的组 `storeship-test` + 周付订阅 `com.overdrive.odmobile.test.weekly`：push（建组、建订阅、两种语言、USD 0.99 等价到全部地区、可售地区、截图），`status` 核对，然后 `products delete … --yes` 收掉。它从未提交，用户永远看不到。
-- **App 定价**：od-mobile 免费，只验 diff 为空；改价路径留到有付费 App 时。
+- **读路径 ✅**：od-mobile 的 `products.md` 照现状写（一组两订阅 + 免费 App），`products diff` 为空——15 项全部 `=`。
+- **写路径 ✅**：一次性的组 `storeship-test` + 周付 `com.overdrive.odmobile.storeship.test.20260908`（product id 一次性用掉，Apple 不让复用）：
+  建组、两种语言、建订阅、两种语言、可售地区 175、USA 0.99 等价到全部地区（CHN 6 覆盖生效、JPN 等价成 150）、
+  1242×2208 截图上传 → `status` 显示 READY_TO_SUBMIT → 再 diff 为空 → `products delete --yes` 连组一起收掉。
+  中间断了四次（USD 写成 USA、列表 include 404、地区先于价格、Apple 两次 500），每次都是原样重跑接着走——幂等是真的。
+- **App 定价**：od-mobile 免费，只验了 diff 为空；改价路径留到有付费 App 时。
+- **没验的**：`priceStart` 排期、`prices` 覆盖之外的手工地区列表、`customAppName`、订阅随版本提审（#28）。

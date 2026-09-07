@@ -43,6 +43,7 @@ Identifiers (app id, key id, issuer id, team id) are not secrets and belong in t
 | `ios.exportOptions` | object | `{}` | Extra keys merged into the generated ExportOptions.plist (base: `method=app-store-connect`, `signingStyle=automatic`, `uploadSymbols=true`, `destination=export`). |
 | `ios.expo` | boolean | auto | `false` for a bare native project (skips the `expo config` preflight). Auto-detected from `app.config.*` / `app.json`. |
 | `listing.file` | path | `store-listing.md` | The store metadata file; format in the README. |
+| `catalog.file` | path | `products.md` | Subscriptions, prices, territories and app price; format in the README (*Products as code*). |
 | `whatsNew.dir` | path | `whats-new` | `version whatsnew` and `release` read `<dir>/<version>/<locale>.txt`. |
 | `release.scheduledTime` | string | `00:00:00Z` | Time of day + zone appended to `--date` for scheduled releases, e.g. `08:00:00-07:00`. |
 | `products` | object | `{}` | Alias → subscription id, for `offer` commands. |

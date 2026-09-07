@@ -73,6 +73,19 @@ true
 
 `npx storeship listing check` 离线查上限。名称 / 副标题挂在 App 上，关键词 / 描述 / 促销文本挂在每个版本上，所以要先有版本记录才能 diff 和 push（第 6 步）。
 
+## 3b. 订阅与定价（付费 App）
+
+写 `products.md`（路径 `catalog.file`）：订阅组、每个订阅的周期 / 档位 / 基准价 / 各语言名称与描述，`## app` 写 App 自己的定价（格式见 README「产品即代码」）。然后：
+
+```bash
+npx storeship products check                   # 上限与引用，离线
+npx storeship products pricepoints com.example.pro.monthly CHN --near 12   # Apple 给的档位
+npx storeship products diff                    # 要做的每一步
+npx storeship products push                    # 建 / 改；从不删
+```
+
+第一个订阅随 App 版本一起提审（第 7 步），不单独提。App Store Connect 里的 App 记录是唯一没有命令能建的东西：先在网页上建好。
+
 ## 4. 截图
 
 支持的每一档设备都要一套（至少 6.9" iPhone；`supportsTablet` 就还要 13" iPad）。截图来自模拟器，摆进画布再加一句标题。

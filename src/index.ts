@@ -2,6 +2,7 @@
 export { createClient, signJwt, explain, ok, AscError, type AscClient, type AscResult } from './asc/client.ts'
 export * from './asc/versions.ts'
 export * from './asc/listing.ts'
+export * from './asc/products.ts'
 export * from './asc/media.ts'
 export * from './asc/misc.ts'
 export * from './asc/offers.ts'

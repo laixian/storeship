@@ -21,6 +21,7 @@ import { listingCommand } from './commands/listing.ts'
 import { mediaCommand } from './commands/media.ts'
 import { appsCommand, deviceCommand, skillCommand } from './commands/misc.ts'
 import { offerCommand } from './commands/offer.ts'
+import { productsCommand } from './commands/products.ts'
 import { releaseCommand } from './commands/release.ts'
 import { previewCommand } from './commands/preview.ts'
 import { reelCommand } from './commands/reel.ts'
@@ -40,6 +41,7 @@ const COMMANDS: Command[] = [
   exportCommand,
   uploadCommand,
   releaseCommand,
+  productsCommand,
   versionCommand,
   buildsCommand,
   listingCommand,

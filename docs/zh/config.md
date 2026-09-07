@@ -43,6 +43,7 @@ storeship 只读一个文件：`storeship.config.json`（或导出同一个对�
 | `ios.exportOptions` | object | `{}` | 追加进生成的 ExportOptions.plist（基础：`method=app-store-connect`、`signingStyle=automatic`、`uploadSymbols=true`、`destination=export`） |
 | `ios.expo` | boolean | 自动 | 纯原生工程写 `false`（跳过 `expo config` 预检）。默认按有没有 `app.config.*` / `app.json` 判断 |
 | `listing.file` | 路径 | `store-listing.md` | 商店文案文件，格式见 README |
+| `catalog.file` | 路径 | `products.md` | 订阅、价格、可售地区、App 定价；格式见 README「产品即代码」 |
 | `whatsNew.dir` | 路径 | `whats-new` | `version whatsnew` 和 `release` 读 `<dir>/<版本>/<locale>.txt` |
 | `release.scheduledTime` | string | `00:00:00Z` | 定时发布时接在 `--date` 后面的时刻 + 时区，如 `08:00:00-07:00` |
 | `products` | object | `{}` | 别名 → 订阅 id，给 `offer` 用 |
