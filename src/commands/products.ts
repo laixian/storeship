@@ -106,23 +106,27 @@ export const productsCommand: Command = {
         const cur = await readAscCatalog(ctx.client(), ctx.appId())
         const sub = cur.subscriptions.find((s) => s.productId === productId)
         if (!sub) throw new StoreshipError(`no subscription ${productId} in App Store Connect`, 'create it first: add it to products.md and `storeship products push`')
-        let points = await subscriptionPricePoints(ctx.client(), sub.id, territory)
+        // Sort before windowing: ASC does not promise an order, and "the tiers around
+        // this amount" is meaningless on an arbitrary one.
+        let points = (await subscriptionPricePoints(ctx.client(), sub.id, territory)).sort((a, b) => Number(a.amount) - Number(b.amount))
         const near = ctx.args.str('near')
+        // Pick from the full list, then window around it, so the marked tier is the one
+        // `products push` would actually choose.
+        const picked = near ? pickPricePoint(points, near) : undefined
         if (near) {
-          const pick = pickPricePoint(points, near)
-          const i = pick ? points.findIndex((p) => p.id === pick.id) : 0
+          const i = picked ? points.findIndex((p) => p.id === picked.id) : 0
           points = points.slice(Math.max(0, i - 5), i + 6)
         }
-        ctx.out.emit(points)
-        for (const p of points) ctx.out.log(`  ${p.territory} ${p.amount}${near && pickPricePoint(points, near)?.id === p.id ? '   ← picked for ' + near : ''}`)
+        ctx.out.emit({ territory, near, picked, points })
+        for (const p of points) ctx.out.log(`  ${p.territory} ${p.amount}${picked?.id === p.id ? '   ← picked for ' + near : ''}`)
       },
     },
     {
       name: 'delete',
       summary: 'delete a subscription that was never submitted (the only kind ASC lets you delete); an emptied group goes too',
-      usage: 'products delete <productId> --yes',
-      flags: { yes: 'required: deleting is permanent' },
-      booleans: ['yes'],
+      usage: 'products delete <productId> --yes [--with-group]',
+      flags: { yes: 'required: deleting is permanent', 'with-group': 'also delete the subscription group if this was its last subscription' },
+      booleans: ['yes', 'with-group'],
       run: async (ctx) => {
         const productId = ctx.args.at(0, 'productId')
         if (!ctx.args.bool('yes')) throw new StoreshipError('refusing without --yes', `this deletes ${productId} from App Store Connect for good (only possible while it was never submitted)`)
@@ -132,12 +136,15 @@ export const productsCommand: Command = {
         await deleteSubscription(ctx.client(), sub.id)
         ctx.out.log(`deleted subscription ${productId} (${sub.id})`)
         const left = cur.subscriptions.filter((s) => s.groupId === sub.groupId && s.id !== sub.id)
+        const groupName = cur.groups.find((g) => g.id === sub.groupId)?.reference
+        // The group is a second irreversible deletion that --yes never named, so it is
+        // opt-in. An empty group costs nothing to leave behind.
         let groupDeleted = false
-        if (!left.length) {
+        if (!left.length && ctx.args.bool('with-group')) {
           await deleteGroup(ctx.client(), sub.groupId)
           groupDeleted = true
-          ctx.out.log(`deleted its group ${cur.groups.find((g) => g.id === sub.groupId)?.reference} (${sub.groupId}), now empty`)
-        }
+          ctx.out.log(`deleted its group ${groupName} (${sub.groupId}), now empty`)
+        } else if (!left.length) ctx.out.log(`its group ${groupName} (${sub.groupId}) is now empty; pass --with-group to delete that too`)
         ctx.out.emit({ deleted: productId, subscriptionId: sub.id, groupDeleted })
       },
     },

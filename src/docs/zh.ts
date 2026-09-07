@@ -67,7 +67,7 @@ export const ZH: Record<string, ZhEntry> = {
   'products diff': { summary: 'products.md 与 ASC 逐项比较，打印要做的每一步；不写' },
   'products push': { summary: '按 diff 的计划写入：建组 / 建订阅 / 语言 / 价格（基准地区等价到全部地区）/ 可售地区 / 审核截图', flags: { yes: '不问确认（不在终端里跑时必须给）' } },
   'products pricepoints': { summary: '列出某订阅在某地区的价格档位（Apple 的档位是离散的，写价格前先看）', flags: { near: '只列这个数附近的档' } },
-  'products delete': { summary: '删掉一个从未提交过的订阅（ASC 只允许删这种）；组空了也一起删', flags: { yes: '必须给：删了就没了' } },
+  'products delete': { summary: '删掉一个从未提交过的订阅（ASC 只允许删这种）', flags: { yes: '必须给：删了就没了', 'with-group': '如果这是组里最后一个订阅，把空组也删掉' } },
   media: { summary: '截图与预览视频：按语言 × 设备档看状态、上传、建槽位' },
   'media status': { summary: '每语言每设备档有几张截图、几条预览（以及 set id）' },
   'media upload': { summary: '把文件传进一个 set（顺序 = 展示顺序）' },

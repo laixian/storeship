@@ -150,13 +150,14 @@ products.md 与 ASC 逐项比较，打印要做的每一步；不写
 
 ### `products delete`
 
-删掉一个从未提交过的订阅（ASC 只允许删这种）；组空了也一起删
+删掉一个从未提交过的订阅（ASC 只允许删这种）
 
-用法: `storeship products delete <productId> --yes`
+用法: `storeship products delete <productId> --yes [--with-group]`
 
 | 参数 | |
 |---|---|
 | `--yes` | 必须给：删了就没了 |
+| `--with-group` | 如果这是组里最后一个订阅，把空组也删掉 |
 
 ## `version`
 

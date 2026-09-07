@@ -152,11 +152,12 @@ Usage: `storeship products pricepoints <productId> <TERRITORY> [--near AMOUNT]`
 
 delete a subscription that was never submitted (the only kind ASC lets you delete); an emptied group goes too
 
-Usage: `storeship products delete <productId> --yes`
+Usage: `storeship products delete <productId> --yes [--with-group]`
 
 | Flags | |
 |---|---|
 | `--yes` | required: deleting is permanent |
+| `--with-group` | also delete the subscription group if this was its last subscription |
 
 ## `version`
 

@@ -221,7 +221,7 @@ docs/appstore/iap/monthly.png
 | 22 | **价格 = 基准地区 + 一个数，其余地区走 `equalizations`** | 这正是 ASC 网页「自动生成」的做法；文件里写 175 行地区价没人维护。对账只比基准地区，外加「有价的地区数」；要手工定某几个地区的价，写 `- prices: JPN 600, KOR 4900` 覆盖 |
 | 23 | **档位按「不高于目标价的最近一档」选**，并打印选中的档 | Apple 的档位是离散的（USA 0.29 → 0.39 → …），写 3.99 正好有；写 4.00 就得选一个，宁可低不高 |
 | 24 | **改价 = POST 新价格，不改旧的**；`- priceStart: YYYY-MM-DD` 排期，不写就立即（对新订户） | 这是 API 的模型，也留下历史。已上架订阅**涨价**会触发 Apple 的用户同意流程，工具只打印提醒，不替人决定 |
-| 25 | **只建、只改，不删**（`products push` 没有删除路径）；`products delete <productId> --yes` 单列，且只对**从未提交**过的订阅有效 | 删了就没了；API 本身也只允许删未提交的。这条命令存在是为了本节的验证：建一个测试订阅再收掉 |
+| 25 | **只建、只改，不删**（`products push` 没有删除路径）；`products delete <productId> --yes` 单列，且只对**从未提交**过的订阅有效；**删空组要再给 `--with-group`** | 删了就没了；API 本身也只允许删未提交的。这条命令存在是为了本节的验证：建一个测试订阅再收掉。⚠️ 组的删除是**第二次不可逆操作，而 `--yes` 那一句从没提到它**（code review 抓到），所以改成显式 opt-in；空组留着不花钱 |
 | 26 | **审核截图按 md5 对账**（`sourceFileChecksum`） | 不然每次 push 都传一遍 |
 | 27 | **可售地区默认全开** + `availableInNewTerritories: true` | 和网页默认一致；要缩就写列表 |
 | 28 | **提交不在这里**：新订阅随 App 版本一起 `version submit` | Apple 规定首个订阅必须和一个新版本一起提审。⚠️ **待验证**：API 里版本提交是否自动带上 READY_TO_SUBMIT 的订阅，还是要在 reviewSubmissionItems 里挂——只能在下一次真发版时看 |
@@ -230,6 +230,29 @@ docs/appstore/iap/monthly.png
 | 31 | **可售地区先于价格**，价格写入按地区幂等（已在目标档的跳过） | 2026-09-08 写路径实测：新订阅没设 availability 之前，任何 `subscriptionPrices` POST 都是 409，Apple 只说 "An error occurred while processing the pricing information"；设完当场 201。同一句报错的另一个原因是档位不属于这个订阅。`hints.ts` 认这句。价格 POST 的最小形状是 subscription + subscriptionPricePoint 两条关系，不带 territory、不带 preserveCurrentPrice |
 | 32 | **列订阅时不 `include=subscriptionAvailability`**，to-one 记录逐个读并容忍 404 | 刚建、没设地区的订阅会让整个列表 404（"no resource of type subscriptionAvailabilities"），读现状的命令就全挂了 |
 | 33 | **价格写地区码不写货币**（`USA 3.99`，不是 `USD`） | 我自己第一次就写成 USD；Apple 全部按地区（ISO 3166 alpha-3）。解析器认出常见货币码直接给出对应地区 |
+
+### 7.4b code review 抓到的 11 条（2026-09-08，发 npm 之前修完）
+
+`/code-review` 对 `v0.1.3...HEAD` 跑了一轮，findings 全部成立，**其中六条是「静默做错事」那一类**——
+diff 说没变化，实际上该改的没改。都在发 0.2.0 到 npm 之前修掉了，每条配回归单测。
+
+| 症状 | 真因 | 修法 |
+|---|---|---|
+| `- territories: USA, CHN, JPN` 改成 `USA, GBR, DEU`，diff 说没变化 | 只比地区**个数**，而 `readAscCatalog` 压根没读回地区**清单** | 从关系端点读回真实清单，按**集合**比 |
+| `- prices: JPN 600` 改成 `800`，diff 说没变化 | 只比基准地区那一格（`basePrice`） | 一次分页读回**整张价格表**（每地区每一行的金额与生效日），文件里写的每一个金额都要对上 |
+| 带 `- priceStart` 的文件每次 push 都重写 175 行 | 幂等判据被 `!s.priceStart` 关掉了 | 判据改成「该地区已有一行 startDate 与目标档都相同」，排期改价同样幂等 |
+| App 只在 3 个地区可售，却报 `all 175 territories` | 数的是 `territoryAvailabilities` **记录数**，而不可售的地区也有记录（`available: false`） | 过滤掉 `available: false` |
+| 换审核截图失败之后，商品变成**一张截图都没有** | 先删旧的再传新的，而这一格只认 1242×2208、传别的尺寸必失败 | 先传新的、成功后再删旧的；只有 409（ASC 只留一张）才回退到「先删再传」 |
+| 组的 `customAppName` 在文件里不写就被清空 | 那一支把「没写」当成「要清空」，与其余字段相反 | 没写 = 不动，与 `description` 一致 |
+| 重复的 `## group 同名` 不报错 | 只查了订阅 id 重复 | `check` 一并查 |
+| 只写 `- prices:` 不写 `- price:` 时什么都不做 | 整段定价逻辑挂在 `if (s.price)` 下 | `check` 直接报错说明基准价是必须的 |
+| 同一个地区可能被 POST 两次 | 等价表 + 覆盖表拼成数组、按下标替换，`territory` 还可能是 undefined | 改成按地区做 Map，顺带只写文件声明的那些地区 |
+| `pricepoints --near` 的窗口是按**下标**取的 | 假设 ASC 按价格排好序，实际没有这个保证 | 先按金额排序，先在全表上选档再取窗口 |
+| `products delete` 顺手删掉整个组 | `--yes` 只提到订阅 | 见决策 #25 |
+
+⚠️ **方法论**：这一轮的 bug 全部是「读得不够」造成的——只读回一个标量（个数、基准价），
+就只能比那个标量，而 diff 的整个价值在于「说没变化就是真没变化」。**对账工具的读路径要读回
+足以重建那个对象的全部信息**，宁可多一次分页请求。
 
 ### 7.5 验证（2026-09-08 全部做完）
 
@@ -240,3 +263,4 @@ docs/appstore/iap/monthly.png
   中间断了四次（USD 写成 USA、列表 include 404、地区先于价格、Apple 两次 500），每次都是原样重跑接着走——幂等是真的。
 - **App 定价**：od-mobile 免费，只验了 diff 为空；改价路径留到有付费 App 时。
 - **没验的**：`priceStart` 排期、`prices` 覆盖之外的手工地区列表、`customAppName`、订阅随版本提审（#28）。
+  §7.4b 修完之后**重跑了 od-mobile 的 `products diff`，15 项仍然全等**（地区数这次来自真实清单而不是记录数）。

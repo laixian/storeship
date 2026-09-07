@@ -59,7 +59,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
-import { type AscClient, ok } from './client.ts'
+import { AscError, type AscClient, ok } from './client.ts'
 import { StoreshipError } from '../errors.ts'
 import { len } from './listing.ts'
 
@@ -256,7 +256,10 @@ export function readCatalog(file: string): Catalog {
 export function checkCatalog(cat: Catalog): string[] {
   const out: string[] = []
   const groups = new Set(cat.groups.map((g) => g.reference))
+  const seenGroups = new Set<string>()
   for (const g of cat.groups) {
+    if (seenGroups.has(g.reference)) out.push(`group ${g.reference}: listed twice`)
+    seenGroups.add(g.reference)
     if (len(g.reference) > PRODUCT_LIMITS.reference) out.push(`group ${g.reference}: reference name ${len(g.reference)}/${PRODUCT_LIMITS.reference}`)
     for (const [loc, l] of Object.entries(g.localizations)) {
       if (!l.name) out.push(`group ${g.reference} ${loc}: name missing`)
@@ -277,6 +280,7 @@ export function checkCatalog(cat: Catalog): string[] {
     }
     if (s.reviewNote && len(s.reviewNote) > PRODUCT_LIMITS.reviewNote) out.push(`${id}: reviewNote ${len(s.reviewNote)}/${PRODUCT_LIMITS.reviewNote}`)
     if (s.reviewScreenshot && !existsSync(s.reviewScreenshot)) out.push(`${id}: reviewScreenshot not found: ${s.reviewScreenshot}`)
+    if (s.prices?.length && !s.price) out.push(`${id}: "prices" needs a "price" too — the base territory is what every other territory is equalized from`)
     if (s.prices?.some((p) => p.territory === s.price?.territory)) out.push(`${id}: prices overrides the base territory ${s.price!.territory}; change "price" instead`)
   }
   return out
@@ -301,11 +305,15 @@ export type AscSubscription = {
   basePrice?: { territory: string; amount: string; pricePointId: string }
   /** How many territories have a price in force (should equal the availability count). */
   pricedTerritoryCount?: number
+  /** Every price row per territory, so the plan can compare overrides and scheduled changes too. */
+  priceTable?: Record<string, PriceRow[]>
+  /** The territories it is available in. Compared as a set: a same-sized different list is a change. */
+  territories?: string[]
   territoryCount?: number
   availableInNewTerritories?: boolean
   screenshot?: { id: string; md5: string; fileName: string; state: string }
 }
-export type AscApp = { basePrice?: { territory: string; amount: string }; territoryCount?: number; availableInNewTerritories?: boolean }
+export type AscApp = { basePrice?: { territory: string; amount: string }; territories?: string[]; territoryCount?: number; availableInNewTerritories?: boolean }
 export type AscCatalog = { app: AscApp; groups: AscGroup[]; subscriptions: AscSubscription[]; territoryTotal: number }
 
 async function pages(c: AscClient, path: string): Promise<{ data: any[]; included: any[] }> {
@@ -329,37 +337,50 @@ async function pages(c: AscClient, path: string): Promise<{ data: any[]; include
 const today = (): string => new Date().toISOString().slice(0, 10)
 
 /** The price in force in one territory: the row with no startDate, or the latest startDate ≤ today. */
-export function currentPriceRow(rows: { startDate: string | null; pricePointId: string }[], now = today()): { startDate: string | null; pricePointId: string } | undefined {
+export function currentPriceRow<T extends { startDate: string | null }>(rows: T[], now = today()): T | undefined {
   const inForce = rows.filter((r) => !r.startDate || r.startDate <= now)
   inForce.sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''))
   return inForce.at(-1)
 }
 
-/** Territory → price point id in force today, across every territory. */
-export async function currentPricePoints(c: AscClient, subId: string): Promise<Map<string, string>> {
-  // Relationship `data` is only present for included types; ask for both.
-  const { data } = await pages(c, `/v1/subscriptions/${subId}/prices?include=subscriptionPricePoint,territory&limit=200`)
-  const byTerritory = new Map<string, { startDate: string | null; pricePointId: string }[]>()
+export type PriceRow = { startDate: string | null; pricePointId: string; amount: string }
+
+/**
+ * Every price row of every territory, in one paginated read: current prices,
+ * scheduled ones, and the amount of each. The plan compares against this, so
+ * per-territory overrides and scheduled changes are seen, not just the base.
+ * Relationship `data` is only present for included types; ask for both.
+ */
+export async function readPriceTable(c: AscClient, subId: string): Promise<Record<string, PriceRow[]>> {
+  const { data, included } = await pages(c, `/v1/subscriptions/${subId}/prices?include=subscriptionPricePoint,territory&limit=200`)
+  const amounts = new Map<string, string>()
+  for (const x of included) if (x.type === 'subscriptionPricePoints') amounts.set(x.id, String(x.attributes?.customerPrice))
+  const out: Record<string, PriceRow[]> = {}
   for (const p of data) {
     const t = p.relationships?.territory?.data?.id as string | undefined
-    if (!t || !p.relationships?.subscriptionPricePoint?.data?.id) continue
-    byTerritory.set(t, [...(byTerritory.get(t) ?? []), { startDate: p.attributes.startDate ?? null, pricePointId: p.relationships.subscriptionPricePoint.data.id }])
-  }
-  const out = new Map<string, string>()
-  for (const [t, rows] of byTerritory) {
-    const cur = currentPriceRow(rows)
-    if (cur) out.set(t, cur.pricePointId)
+    const pp = p.relationships?.subscriptionPricePoint?.data?.id as string | undefined
+    if (!t || !pp) continue
+    ;(out[t] ??= []).push({ startDate: p.attributes?.startDate ?? null, pricePointId: pp, amount: amounts.get(pp) ?? '?' })
   }
   return out
 }
 
+/** Does this territory already carry `amount` — in force, or scheduled for `start`? Pure. */
+export function priceMatches(rows: PriceRow[] | undefined, amount: string, start?: string): boolean {
+  if (start) return (rows ?? []).some((r) => r.startDate === start && Number(r.amount) === Number(amount))
+  const cur = currentPriceRow(rows ?? [])
+  return !!cur && Number(cur.amount) === Number(amount)
+}
+
+/** Is any price set for this territory (in force, or scheduled for `start`)? Pure. */
+export function pricePresent(rows: PriceRow[] | undefined, start?: string): boolean {
+  if (start) return (rows ?? []).some((r) => r.startDate === start)
+  return !!currentPriceRow(rows ?? [])
+}
+
 export async function readSubscriptionPrice(c: AscClient, subId: string, territory: string): Promise<AscSubscription['basePrice']> {
-  const { data, included } = await pages(c, `/v1/subscriptions/${subId}/prices?filter[territory]=${territory}&include=subscriptionPricePoint&limit=200`)
-  const rows = data.map((p: any) => ({ startDate: p.attributes.startDate as string | null, pricePointId: p.relationships.subscriptionPricePoint.data.id as string }))
-  const cur = currentPriceRow(rows)
-  if (!cur) return undefined
-  const point = included.find((x: any) => x.type === 'subscriptionPricePoints' && x.id === cur.pricePointId)
-  return { territory, amount: String(point?.attributes?.customerPrice ?? '?'), pricePointId: cur.pricePointId }
+  const cur = currentPriceRow((await readPriceTable(c, subId))[territory] ?? [])
+  return cur ? { territory, amount: cur.amount, pricePointId: cur.pricePointId } : undefined
 }
 
 export async function readAscCatalog(c: AscClient, appId: string, wanted?: Catalog): Promise<AscCatalog> {
@@ -403,14 +424,17 @@ export async function readAscCatalog(c: AscClient, appId: string, wanted?: Catal
       }
       const want = wanted?.subscriptions.find((w) => w.productId === sub.productId)
       if (want?.price) {
-        sub.basePrice = await readSubscriptionPrice(c, sub.id, want.price.territory)
-        sub.pricedTerritoryCount = (await currentPricePoints(c, sub.id)).size
+        sub.priceTable = await readPriceTable(c, sub.id)
+        const base = currentPriceRow(sub.priceTable[want.price.territory] ?? [])
+        if (base) sub.basePrice = { territory: want.price.territory, amount: base.amount, pricePointId: base.pricePointId }
+        sub.pricedTerritoryCount = Object.values(sub.priceTable).filter((rows) => !!currentPriceRow(rows)).length
       }
-      const avRes = await c.get(`/v1/subscriptions/${sub.id}/subscriptionAvailability?include=availableTerritories`)
+      const avRes = await c.get(`/v1/subscriptions/${sub.id}/subscriptionAvailability`)
       if (avRes.status === 200 && avRes.json?.data) {
-        const av = avRes.json
-        sub.availableInNewTerritories = av.data.attributes?.availableInNewTerritories
-        sub.territoryCount = av.data.relationships?.availableTerritories?.meta?.paging?.total ?? av.included?.length
+        sub.availableInNewTerritories = avRes.json.data.attributes?.availableInNewTerritories
+        // The included list is one page; the ids have to come from the relationship endpoint.
+        sub.territories = (await pages(c, `/v1/subscriptionAvailabilities/${avRes.json.data.id}/availableTerritories?limit=200`)).data.map((t: any) => t.id as string)
+        sub.territoryCount = sub.territories.length
       } else if (avRes.status !== 404) ok(avRes, 'read availability')
       subscriptions.push(sub)
     }
@@ -427,10 +451,15 @@ export async function readAscCatalog(c: AscClient, appId: string, wanted?: Catal
     const point = cur ? mp.included.find((x: any) => x.type === 'appPricePoints' && x.id === cur.pricePointId) : undefined
     if (base && point) app.basePrice = { territory: base, amount: String(point.attributes.customerPrice) }
   }
-  const av = await c.get(`/v2/appAvailabilities/${appId}?include=territoryAvailabilities`)
-  if (av.status === 200) {
-    app.availableInNewTerritories = av.json?.data?.attributes?.availableInNewTerritories
-    app.territoryCount = av.json?.data?.relationships?.territoryAvailabilities?.meta?.paging?.total ?? av.json?.included?.length
+  const av = await c.get(`/v2/appAvailabilities/${appId}`)
+  if (av.status === 200 && av.json?.data) {
+    app.availableInNewTerritories = av.json.data.attributes?.availableInNewTerritories
+    // ⚠️ A territoryAvailabilities record exists for territories the app is NOT sold in
+    // too, with `available: false` — counting records would call an app that sells
+    // nowhere "all 175 territories". Keep only the available ones.
+    const rows = await pages(c, `/v2/appAvailabilities/${av.json.data.id}/territoryAvailabilities?include=territory&limit=200`)
+    app.territories = rows.data.filter((t: any) => t.attributes?.available !== false).map((t: any) => t.relationships?.territory?.data?.id as string).filter(Boolean)
+    app.territoryCount = app.territories.length
   }
   return { app, groups, subscriptions, territoryTotal }
 }
@@ -467,9 +496,15 @@ export async function appPricePoints(c: AscClient, appId: string, territory: str
 export type Action = { target: string; what: string; detail?: string; apply: (c: AscClient, appId: string) => Promise<void> }
 export type Plan = { same: string[]; actions: Action[]; warnings: string[] }
 
-const territoriesSame = (want: Territories | undefined, count: number | undefined, newOnes: boolean | undefined, total: number): boolean => {
-  if (!want || want === 'all') return count === total && newOnes !== false
-  return count === want.length
+/**
+ * Pure. `have` is the list ASC actually sells in; comparing sizes was not enough —
+ * swapping GBR for JPN keeps the count and would have been reported as "no change".
+ * Unknown (`undefined`) means there is no availability record yet, so: not the same.
+ */
+export function territoriesSame(want: Territories | undefined, have: string[] | undefined, newOnes: boolean | undefined, total: number): boolean {
+  if (!have) return false
+  if (!want || want === 'all') return have.length === total && newOnes !== false
+  return have.length === want.length && new Set(have).size === new Set([...have, ...want]).size
 }
 
 /**
@@ -500,7 +535,10 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
       const ltag = `${tag} ${locale}`
       const attrs: Record<string, unknown> = {}
       if (!curLoc || curLoc.name !== l.name) attrs.name = l.name
-      if ((l.customAppName ?? null) !== (curLoc?.customAppName ?? null) && (l.customAppName !== undefined || curLoc)) attrs.customAppName = l.customAppName ?? null
+      // Omitted = leave alone, the same contract as every other field. Clearing it
+      // takes an explicit empty value; otherwise adopting products.md for a group whose
+      // custom app name was set in the web UI would wipe it on the first push.
+      if (l.customAppName !== undefined && l.customAppName !== (curLoc?.customAppName ?? '')) attrs.customAppName = l.customAppName
       if (!curLoc) {
         plan.actions.push({
           target: ltag,
@@ -575,7 +613,7 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
     if (s.territories !== undefined || !cur) {
       const want = s.territories ?? 'all'
       const ttag = `${tag} territories`
-      if (cur && territoriesSame(want, cur.territoryCount, cur.availableInNewTerritories, current.territoryTotal)) plan.same.push(`${ttag} (${cur.territoryCount})`)
+      if (cur && territoriesSame(want, cur.territories, cur.availableInNewTerritories, current.territoryTotal)) plan.same.push(`${ttag} (${cur.territoryCount})`)
       else
         plan.actions.push({
           target: ttag,
@@ -599,11 +637,17 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
     if (s.price) {
       const ptag = `${tag} price`
       const cp = cur?.basePrice
-      const wantCount = s.territories && s.territories !== 'all' ? s.territories.length : current.territoryTotal
-      const baseSame = !!cp && cp.territory === s.price.territory && Number(cp.amount) === Number(s.price.amount) && !s.priceStart
-      const filled = (cur?.pricedTerritoryCount ?? 0) >= wantCount
-      if (baseSame && filled) plan.same.push(`${ptag} ${s.price.territory} ${cp!.amount} (${cur!.pricedTerritoryCount} territories)`)
-      else if (baseSame && !filled) plan.actions.push({ target: ptag, what: `fill ${wantCount - (cur?.pricedTerritoryCount ?? 0)} territories without a price`, detail: 'equalized from the base territory', apply: (c) => priceApply(c, s, subIds, tag) })
+      const table = cur?.priceTable
+      const explicit = s.territories && s.territories !== 'all' ? s.territories : undefined
+      const wantCount = explicit?.length ?? current.territoryTotal
+      // Every amount the file states has to hold, not just the base one: an edited
+      // `prices:` override used to be invisible because only basePrice was compared.
+      const baseSame = priceMatches(table?.[s.price.territory], s.price.amount, s.priceStart)
+      const overridesSame = (s.prices ?? []).every((o) => priceMatches(table?.[o.territory], o.amount, s.priceStart))
+      const priced = explicit ? explicit.filter((t) => pricePresent(table?.[t], s.priceStart)).length : Object.values(table ?? {}).filter((rows) => pricePresent(rows, s.priceStart)).length
+      const filled = priced >= wantCount
+      if (baseSame && overridesSame && filled) plan.same.push(`${ptag} ${s.price.territory} ${s.price.amount} (${priced} territories${s.priceStart ? `, from ${s.priceStart}` : ''})`)
+      else if (baseSame && overridesSame && !filled) plan.actions.push({ target: ptag, what: `fill ${wantCount - priced} territories without a price`, detail: 'equalized from the base territory', apply: (c) => priceApply(c, s, subIds, tag) })
       else {
         if (cp && cur?.state === 'APPROVED' && Number(s.price.amount) > Number(cp.amount)) plan.warnings.push(`${tag}: raising a live price (${cp.territory} ${cp.amount} → ${s.price.amount}) triggers Apple's subscriber consent flow`)
         plan.actions.push({
@@ -625,8 +669,20 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
           detail: basename(s.reviewScreenshot),
           apply: async (c) => {
             const sid = subIds.get(s.productId)!
-            if (cur?.screenshot) ok(await c.delete(`/v1/subscriptionAppStoreReviewScreenshots/${cur.screenshot.id}`), 'delete old review screenshot')
-            await uploadReviewScreenshot(c, sid, s.reviewScreenshot!, readFile)
+            const old = cur?.screenshot?.id
+            // Upload first, delete the old one only once the new one is committed. The old
+            // order lost the existing screenshot whenever the new file was rejected — and
+            // this slot rejects anything but 1242×2208, so that is the common case.
+            try {
+              await uploadReviewScreenshot(c, sid, s.reviewScreenshot!, readFile)
+            } catch (e) {
+              if (!old || !(e instanceof AscError) || e.result.status !== 409) throw e
+              // ASC keeps at most one: it refused the second, so make room and retry.
+              ok(await c.delete(`/v1/subscriptionAppStoreReviewScreenshots/${old}`), 'delete old review screenshot')
+              await uploadReviewScreenshot(c, sid, s.reviewScreenshot!, readFile)
+              return
+            }
+            if (old) ok(await c.delete(`/v1/subscriptionAppStoreReviewScreenshots/${old}`), 'delete old review screenshot')
           },
         })
     }
@@ -658,7 +714,7 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
         })
     }
     if (a.territories !== undefined) {
-      if (territoriesSame(a.territories, current.app.territoryCount, current.app.availableInNewTerritories, current.territoryTotal)) plan.same.push(`app territories (${current.app.territoryCount})`)
+      if (territoriesSame(a.territories, current.app.territories, current.app.availableInNewTerritories, current.territoryTotal)) plan.same.push(`app territories (${current.app.territoryCount})`)
       else
         plan.actions.push({
           target: 'app territories',
@@ -690,19 +746,24 @@ async function priceApply(c: AscClient, s: SubscriptionBlock, subIds: Map<string
   if (!tiers.length) throw new StoreshipError(`${tag}: App Store Connect has no price points for territory "${s.price!.territory}"`, 'territory codes are ISO 3166 alpha-3 (USA, CHN, JPN, GBR, DEU…), not currencies')
   const base = pickPricePoint(tiers, s.price!.amount)
   if (!base) throw new StoreshipError(`${tag}: no price point at or below ${s.price!.territory} ${s.price!.amount} (lowest is ${tiers.map((t) => Number(t.amount)).sort((a, b) => a - b)[0]})`, `run \`storeship products pricepoints ${s.productId} ${s.price!.territory}\` to see the tiers`)
-  const points = [base, ...(await equalizations(c, base.id))]
+  // Keyed by territory: the equalization list can repeat one, and an override has to
+  // replace the equalized row rather than be POSTed next to it.
+  const byTerritory = new Map<string, PricePoint>()
+  for (const p of [base, ...(await equalizations(c, base.id))]) if (p.territory) byTerritory.set(p.territory, p)
   for (const o of s.prices ?? []) {
     const p = pickPricePoint(await subscriptionPricePoints(c, sid, o.territory), o.amount)
     if (!p) throw new StoreshipError(`${tag}: no price point at or below ${o.territory} ${o.amount}`)
-    const i = points.findIndex((x) => x.territory === o.territory)
-    if (i >= 0) points[i] = p
-    else points.push(p)
+    byTerritory.set(o.territory, p)
   }
-  // Idempotent: a territory already on the target tier is skipped, so a run
-  // that died half-way (or a base-only change) does not re-POST 175 rows.
-  const have = await currentPricePoints(c, sid)
+  const only = s.territories && s.territories !== 'all' ? new Set(s.territories) : undefined
+  const points = [...byTerritory.values()].filter((p) => !only || only.has(p.territory))
+  // Idempotent, scheduled changes included: a territory that already carries this tier
+  // (in force, or scheduled for the same day) is skipped, so a re-run writes nothing.
+  const have = await readPriceTable(c, sid)
   for (const p of points) {
-    if (!s.priceStart && have.get(p.territory) === p.id) continue
+    const rows = have[p.territory] ?? []
+    const already = s.priceStart ? rows.some((r) => r.startDate === s.priceStart && r.pricePointId === p.id) : currentPriceRow(rows)?.pricePointId === p.id
+    if (already) continue
     const body = {
       data: {
         type: 'subscriptionPrices',
