@@ -136,5 +136,5 @@ tmp；`card.ts` 负责「带洞的前景」（四块背板由工具生成，模�
 | `npm pack` 装进空目录、从 od-mobile 目录跑 | `version status` / `skill list` / `shots check` 都通过 dist 跑通（决策 #2 成立） |
 | README 例子用假 id | 已换 |
 | od-mobile 引用方式 | 暂时 `devDependencies: "storeship": "link:../storeship"`（要求旁边仓库已 `pnpm build`）；**发到 npm 后改成 `^0.1.0`** |
-| 一次真实发版用 `storeship release` 走完 | **进行中（od-mobile 1.3.2，2026-09-07）**。0.1.0 先发了再验：第一步预检就拦住——Info.plist 的 `CFBundleIdentifier` 是 `$(PRODUCT_BUNDLE_IDENTIFIER)` 占位符，工具拿它和配置比，报 bundle id mismatch。0.1.1 改为按 pbxproj 里 INFOPLIST_FILE 指向这份 plist 的构建配置解析 `$(VAR)`（优先 `ios.configuration`，Debug/Release 不一致且没指定就放弃比较）。**这是拿 Expo 生成的工程测出来的，说明 0.1.0 之前那些「假 fetch 单测 + 只读命令实跑」盖不到 `ship` 的预检**——写路径每一条都得这样真跑一次 |
+| 一次真实发版用 `storeship release` 走完 | **✅ 2026-09-07 od-mobile 1.3.2 走完**（归档 → 导出 → 上传 → 建版本（定时）→ What's New → attach → listing push → submit，全部对真 ASC）。**0.1.0 在真发版里暴露三条，全部收进 0.1.1**：① 预检拿 Info.plist 的 `$(PRODUCT_BUNDLE_IDENTIFIER)` 占位符比 bundle id → 按 pbxproj 解析；② 导出报 `No Accounts`（Xcode 没登 Apple ID）时只能整条重来 → 加 `export <归档>` 和 `release --archive`，hint 单列；③ attach 拿「最新 VALID 构建」，而刚传的构建几分钟内不在列表里，于是把上一版的构建挂了上去、409 读起来像「没处理完」→ 等指定构建号（`--build`，release 默认用刚构建的）。**教训：假 fetch 单测和只读命令实跑都盖不到「时间」这一维**（构建出现要几分钟、账号会过期），这类只有真跑才知道 |
 | GitHub 仓库 / npm publish | 未做，等 Ken 拍板 |
