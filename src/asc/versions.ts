@@ -119,13 +119,19 @@ export async function attachLatestBuild(
   c: AscClient,
   appId: string,
   version: string,
-  opts: { wait?: boolean; timeoutMs?: number; intervalMs?: number; onWait?: (b: BuildRow | undefined) => void; sleep?: (ms: number) => Promise<void> } = {},
+  opts: { build?: string; wait?: boolean; timeoutMs?: number; intervalMs?: number; onWait?: (b: BuildRow | undefined) => void; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<{ build: BuildRow; attached: boolean }> {
   const v = await requireVersion(c, appId, version)
   const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
   const deadline = Date.now() + (opts.timeoutMs ?? 30 * 60_000)
+  const want = opts.build
   for (;;) {
-    const build = (await listBuilds(c, appId, 5))[0]
+    // A freshly uploaded build takes minutes to appear in /v1/builds at all. Without a
+    // build number "the newest" is whatever was there before — 2026-09-07 that was the
+    // previous release's build, and attaching it failed with a 409 that reads like
+    // "not processed yet". So when the caller knows the number, wait for that one.
+    const builds = await listBuilds(c, appId, want ? 20 : 5)
+    const build = want ? builds.find((b) => b.version === want) : builds[0]
     if (build && build.processingState === 'VALID') {
       ok(
         await c.patch(`/v1/appStoreVersions/${v.id}/relationships/build`, { data: { type: 'builds', id: build.id } }),
@@ -134,11 +140,11 @@ export async function attachLatestBuild(
       return { build, attached: true }
     }
     if (!opts.wait) {
-      if (!build) throw new StoreshipError('no builds in the account yet', 'upload one first: `storeship ship`')
+      if (!build) throw new StoreshipError(want ? `build ${want} is not in App Store Connect yet` : 'no builds in the account yet', want ? 'processing takes minutes after upload; retry, or use --wait' : 'upload one first: `storeship ship`')
       return { build, attached: false }
     }
     opts.onWait?.(build)
-    if (Date.now() > deadline) throw new StoreshipError(`gave up waiting for a VALID build after ${Math.round((opts.timeoutMs ?? 30 * 60_000) / 60_000)} min`, 'check `storeship builds`; a build that fails processing gets an email from Apple, not a state change')
+    if (Date.now() > deadline) throw new StoreshipError(`gave up waiting for ${want ? `build ${want}` : 'a build'} to become VALID after ${Math.round((opts.timeoutMs ?? 30 * 60_000) / 60_000)} min`, 'check `storeship builds`; a build that fails processing gets an email from Apple, not a state change')
     await sleep(opts.intervalMs ?? 30_000)
   }
 }

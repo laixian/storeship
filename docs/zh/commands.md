@@ -88,13 +88,14 @@
 
 整条链：ship + 建版本 + What's New + 等构建挂上 + 提审
 
-用法: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
+用法: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--build N] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
 
 | 参数 | |
 |---|---|
 | `--date` | 定时发布的日期；不给就是审核通过后手动发布 |
 | `--whatsnew` | 放 <locale>.txt 的目录；默认 <whatsNew.dir>/<version>，没有就静默跳过 |
 | `--archive` | 不再归档，直接导出并上传这个已有的 .xcarchive（导出或上传失败之后从这里接着走） |
+| `--build` | 要挂的构建号；默认刚构建的那个，--no-ship 时默认账号里最新的 |
 | `--no-ship` | 跳过归档 / 导出 / 上传（构建已经在 App Store Connect 里） |
 | `--no-submit` | 挂上构建就停，不提审 |
 | `--yes` | 不问确认（不在终端里跑时必须给） |
@@ -138,13 +139,14 @@ App Store 版本记录：状态、创建、What's New、挂构建、提审、撤
 
 ### `version attach`
 
-把最新构建挂到版本上（要 VALID）；--wait 等它变 VALID
+把构建挂到版本上（要 VALID）；--wait 等它变 VALID
 
-用法: `storeship version attach <version> [--wait] [--timeout MIN]`
+用法: `storeship version attach <version> [--build N] [--wait] [--timeout MIN]`
 
 | 参数 | |
 |---|---|
-| `--wait` | 每 30 秒轮询直到最新构建变 VALID，而不是直接失败 |
+| `--build` | 要挂的构建号（CFBundleVersion）；默认账号里最新的那个 |
+| `--wait` | 每 30 秒轮询直到构建变 VALID（给了 --build 就是等它出现并变 VALID），而不是直接失败 |
 | `--timeout` | --wait 最多等的分钟数；默认 30 |
 
 ### `version submit`

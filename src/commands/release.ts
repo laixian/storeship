@@ -29,11 +29,12 @@ async function confirm(ctx: Ctx, question: string): Promise<void> {
 export const releaseCommand: Command = {
   name: 'release',
   summary: 'the whole thing: ship + version create + whatsnew + attach --wait + submit',
-  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]',
+  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--build N] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]',
   flags: {
     date: 'scheduled release day; without it the release is manual after approval',
     whatsnew: "directory with <locale>.txt What's New files; default <whatsNew.dir>/<version>, silently skipped when absent",
     archive: 'export + upload this existing .xcarchive instead of archiving again (resume here when export or upload failed)',
+    build: 'build number to attach; default: the one just built, or with --no-ship the newest in the account',
     'no-ship': 'skip archive / export / upload (the build is already in App Store Connect)',
     'no-submit': 'stop after attaching the build',
     yes: 'skip the confirmation (required when not in a terminal)',
@@ -68,7 +69,7 @@ export const releaseCommand: Command = {
       doShip ? (archivePath ? `export + upload ${archivePath}` : `archive + export + upload ${version} (${pre!.versions.native.build})`) : 'skip build/upload (--no-ship)',
       `version create ${version}${date ? ` scheduled ${date}` : ''} (no-op if it exists)`,
       Object.keys(texts).length ? `What's New for ${Object.keys(texts).join(', ')}` : "no What's New (none given)",
-      'attach the newest VALID build (waiting for processing)',
+      `attach build ${ctx.args.str('build') ?? pre?.versions.native.build ?? '(newest)'} once it is VALID (waiting for processing)`,
       doSubmit ? 'submit for review' : 'stop before submitting (--no-submit)',
     ]
     ctx.out.note(`plan for ${version}:\n${plan.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}`)
@@ -90,10 +91,12 @@ export const releaseCommand: Command = {
       steps.whatsNew = await writeWhatsNew(client, v.id, texts)
       ctx.out.note(`   What's New written`)
     }
+    const want = ctx.args.str('build') ?? pre?.versions.native.build
     const att = await attachLatestBuild(client, appId, version, {
+      build: want,
       wait: true,
       timeoutMs: ctx.args.num('timeout', 40) * 60_000,
-      onWait: (b) => ctx.out.note(`   waiting for build: ${b ? `${b.version} ${b.processingState}` : 'not visible yet'}`),
+      onWait: (b) => ctx.out.note(`   waiting for build ${want ?? '(newest)'}: ${b ? `${b.version} ${b.processingState}` : 'not visible yet'}`),
     })
     ctx.out.note(`   attached build ${att.build.version}`)
     steps.attach = att

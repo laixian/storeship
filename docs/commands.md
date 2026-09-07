@@ -88,13 +88,14 @@ Usage: `storeship upload <file.ipa> [--quiet]`
 
 the whole thing: ship + version create + whatsnew + attach --wait + submit
 
-Usage: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
+Usage: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--build N] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
 
 | Flags | |
 |---|---|
 | `--date` | scheduled release day; without it the release is manual after approval |
 | `--whatsnew` | directory with <locale>.txt What's New files; default <whatsNew.dir>/<version>, silently skipped when absent |
 | `--archive` | export + upload this existing .xcarchive instead of archiving again (resume here when export or upload failed) |
+| `--build` | build number to attach; default: the one just built, or with --no-ship the newest in the account |
 | `--no-ship` | skip archive / export / upload (the build is already in App Store Connect) |
 | `--no-submit` | stop after attaching the build |
 | `--yes` | skip the confirmation (required when not in a terminal) |
@@ -138,13 +139,14 @@ Usage: `storeship version whatsnew <version> [--dir DIR | --file <locale>=<path>
 
 ### `version attach`
 
-attach the newest build (must be VALID); --wait polls until it is
+attach a build (must be VALID); --wait polls until it is
 
-Usage: `storeship version attach <version> [--wait] [--timeout MIN]`
+Usage: `storeship version attach <version> [--build N] [--wait] [--timeout MIN]`
 
 | Flags | |
 |---|---|
-| `--wait` | poll every 30 s until the newest build is VALID instead of failing |
+| `--build` | build number (CFBundleVersion) to attach; default: the newest build in the account |
+| `--wait` | poll every 30 s until the build is VALID (or, with --build, until it appears and is VALID) instead of failing |
 | `--timeout` | minutes to keep waiting with --wait; default 30 |
 
 ### `version submit`

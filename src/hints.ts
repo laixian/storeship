@@ -23,7 +23,9 @@ export const HINTS: Hint[] = [
   },
   {
     test: /pre-release build could not be added/i,
-    hint: 'The build is uploaded but not processed yet (processingState is not VALID). Wait a few minutes, or use `storeship version attach <ver> --wait`.',
+    hint:
+      'Either the build is not processed yet (processingState is not VALID), or the build picked is an older one that already belongs to another version — a fresh upload takes minutes to show up in the list at all. ' +
+      'Wait, and name the build: `storeship version attach <ver> --build <N> --wait`.',
   },
   {
     test: /ICP_NUMBER_MIIT_PROVIDER_NAME_MISMATCH/,

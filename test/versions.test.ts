@@ -64,6 +64,29 @@ describe('versions', () => {
     assert.deepEqual(patched, { data: { type: 'builds', id: 'b9' } })
   })
 
+  it('attach with a build number waits for that build, ignoring an older VALID one', async () => {
+    let polls = 0
+    let patched: any
+    const { client } = fake({
+      'GET /v1/apps/A/appStoreVersions': () => versions(),
+      'GET /v1/builds': () => {
+        polls++
+        const b9 = { id: 'b9', attributes: { version: '9', processingState: 'VALID', uploadedDate: 'd' } }
+        const b10 = { id: 'b10', attributes: { version: '10', processingState: polls < 3 ? 'PROCESSING' : 'VALID', uploadedDate: 'e' } }
+        return { data: polls < 2 ? [b9] : [b10, b9] }
+      },
+      'PATCH /v1/appStoreVersions/v1/relationships/build': (_u, init) => {
+        patched = JSON.parse(init!.body as string)
+        return {}
+      },
+    })
+    const waits: string[] = []
+    const r = await attachLatestBuild(client, 'A', '1.0', { build: '10', wait: true, sleep: async () => {}, onWait: (b) => waits.push(b ? b.processingState : 'none') })
+    assert.equal(r.build.version, '10')
+    assert.deepEqual(waits, ['none', 'PROCESSING'])
+    assert.deepEqual(patched, { data: { type: 'builds', id: 'b10' } })
+  })
+
   it('attach without --wait reports a non-VALID build instead of failing', async () => {
     const { client } = fake({
       'GET /v1/apps/A/appStoreVersions': () => versions(),

@@ -73,21 +73,23 @@ export const versionCommand: Command = {
     },
     {
       name: 'attach',
-      summary: 'attach the newest build (must be VALID); --wait polls until it is',
-      usage: 'version attach <version> [--wait] [--timeout MIN]',
-      flags: { wait: 'poll every 30 s until the newest build is VALID instead of failing', timeout: 'minutes to keep waiting with --wait; default 30' },
+      summary: 'attach a build (must be VALID); --wait polls until it is',
+      usage: 'version attach <version> [--build N] [--wait] [--timeout MIN]',
+      flags: { build: 'build number (CFBundleVersion) to attach; default: the newest build in the account', wait: 'poll every 30 s until the build is VALID (or, with --build, until it appears and is VALID) instead of failing', timeout: 'minutes to keep waiting with --wait; default 30' },
       booleans: ['wait'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
+        const want = ctx.args.str('build')
         const r = await attachLatestBuild(ctx.client(), ctx.appId(), version, {
+          build: want,
           wait: ctx.args.bool('wait'),
           timeoutMs: ctx.args.num('timeout', 30) * 60_000,
-          onWait: (b) => ctx.out.note(`waiting: latest build ${b ? `${b.version} is ${b.processingState}` : 'not visible yet'} …`),
+          onWait: (b) => ctx.out.note(`waiting: build ${want ?? '(newest)'} ${b ? `${b.version} is ${b.processingState}` : 'not visible yet'} …`),
         })
         ctx.out.emit(r)
         if (r.attached) ctx.out.log(`attached build ${r.build.version} (${r.build.id}) to ${version}`)
         else {
-          ctx.out.log(`latest build ${r.build.version} is ${r.build.processingState}, not VALID yet — retry, or use --wait`)
+          ctx.out.log(`build ${r.build.version} is ${r.build.processingState}, not VALID yet — retry, or use --wait`)
           process.exitCode = 1
         }
       },
