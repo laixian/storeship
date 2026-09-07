@@ -49,6 +49,32 @@ Permission rules the human can add so none of this prompts (Claude Code, `.claud
 - Subscriptions, prices and offer codes are a different job with its own skill: `storeship-products`. A new subscription does ride along with this release, though — it is submitted together with the app version, so check `storeship products status` before submitting if one was just created.
 - Screenshots and previews are inherited from the previous version. Only upload what changed: `storeship media status <version> --json` for the set ids, then `storeship media upload screenshot <setId> <files…>` in display order.
 
+## After a rejection
+
+**Apple's reason is not in the API.** Resolution Center is web-only, so you cannot read why the version was rejected — ask the human to paste Apple's message, and never guess at it. Fixing the wrong thing costs another review cycle.
+
+`storeship version status --json` first. A version Apple rejected is **already editable**: do not run `version cancel` on it. Cancel is only for a version still sitting in the queue.
+
+Most rejections, and nearly all first-submission ones, are metadata rather than binary. If nothing about the app itself has to change:
+
+```bash
+# edit the ## review notes (and whatever else Apple named) in the listing file
+storeship listing check
+storeship listing diff <version> --json
+storeship listing push <version>
+storeship version submit <version>
+```
+
+**No new build, no buildNumber bump, no re-upload.** Say that to the human — rebuilding is the reflex, and it wastes half an hour.
+
+Only when Apple requires a change to the app itself: bump `version` / `ios.buildNumber`, `npx expo prebuild`, then `storeship release <version> --no-submit`, check, and submit.
+
+Three causes worth checking before resubmitting, all of them fixed in files this tool owns:
+
+- **The reviewer could not reach or verify a feature.** The `## review` notes have to walk one device from launch to the feature, in order, naming what is tapped. If anything needs an account, `demoAccountName` plus `ASC_DEMO_PASSWORD`.
+- **A permission was not explained.** Say what each one is for, and what still works if it is declined — a reviewer who denies a permission and hits a dead end rejects.
+- **A subscription's paywall or description is incomplete.** Price, period, what it unlocks, and links to a EULA and a privacy policy, in the store description as well as on the paywall. `storeship products status` shows whether the subscription's own metadata and review screenshot are in place.
+
 ## Reading failures
 
 - `preflight` errors: prebuild forgotten, or the version you asked for is not what `ios/` contains.

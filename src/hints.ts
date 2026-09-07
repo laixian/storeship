@@ -55,7 +55,8 @@ export const HINTS: Hint[] = [
   {
     test: /ENTITY_STATE_INVALID|not in an editable state|STATE_ERROR/,
     hint:
-      'The version is read-only in its current state (waiting for review / in review). `storeship version cancel` unlocks it, at the cost of the review queue position. ' +
+      'The version is read-only in its current state — but only WAITING_FOR_REVIEW / IN_REVIEW are: `storeship version cancel` unlocks those, at the cost of the queue position. ' +
+      'A version Apple REJECTED is already editable, so do not cancel it: fix the metadata and `version submit` again. ' +
       'If this came from a submit, read the associated errors above: account-level validations show up here too.',
   },
   {
