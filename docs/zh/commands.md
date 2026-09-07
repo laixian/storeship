@@ -13,6 +13,7 @@
 - [`init`](#init) — 读工程（expo config）和 App Store Connect，生成 storeship.config.json
 - [`doctor`](#doctor) — 逐项体检：Node、Xcode、密钥文件与权限、工程、配置，并实际用密钥请求一次
 - [`ship`](#ship) — 归档 → 导出 IPA → 上传到 App Store Connect（版本号由你事先改好）
+- [`export`](#export) — 把一个已有的 .xcarchive 导出成 IPA（归档成功、导出失败之后从这里接着走）
 - [`upload`](#upload) — 用 altool 上传一个已导出的 IPA
 - [`release`](#release) — 整条链：ship + 建版本 + What's New + 等构建挂上 + 提审
 - [`version`](#version) — App Store 版本记录：状态、创建、What's New、挂构建、提审、撤回
@@ -63,6 +64,16 @@
 | `--force` | app.config 和 ios/ 的版本号不一致（= 没跑 prebuild）时也照样构建 |
 | `--quiet` | 不回显 xcodebuild / altool 的输出 |
 
+## `export`
+
+把一个已有的 .xcarchive 导出成 IPA（归档成功、导出失败之后从这里接着走）
+
+用法: `storeship export <path.xcarchive> [--quiet]`
+
+| 参数 | |
+|---|---|
+| `--quiet` | 不回显 xcodebuild 的输出 |
+
 ## `upload`
 
 用 altool 上传一个已导出的 IPA
@@ -77,12 +88,13 @@
 
 整条链：ship + 建版本 + What's New + 等构建挂上 + 提审
 
-用法: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
+用法: `storeship release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]`
 
 | 参数 | |
 |---|---|
 | `--date` | 定时发布的日期；不给就是审核通过后手动发布 |
 | `--whatsnew` | 放 <locale>.txt 的目录；默认 <whatsNew.dir>/<version>，没有就静默跳过 |
+| `--archive` | 不再归档，直接导出并上传这个已有的 .xcarchive（导出或上传失败之后从这里接着走） |
 | `--no-ship` | 跳过归档 / 导出 / 上传（构建已经在 App Store Connect 里） |
 | `--no-submit` | 挂上构建就停，不提审 |
 | `--yes` | 不问确认（不在终端里跑时必须给） |

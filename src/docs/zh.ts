@@ -29,12 +29,14 @@ export const ZH: Record<string, ZhEntry> = {
     summary: '归档 → 导出 IPA → 上传到 App Store Connect（版本号由你事先改好）',
     flags: { 'skip-upload': '只归档和导出，打印 IPA 路径留给 `upload`', force: 'app.config 和 ios/ 的版本号不一致（= 没跑 prebuild）时也照样构建', quiet: '不回显 xcodebuild / altool 的输出' },
   },
+  export: { summary: '把一个已有的 .xcarchive 导出成 IPA（归档成功、导出失败之后从这里接着走）', flags: { quiet: '不回显 xcodebuild 的输出' } },
   upload: { summary: '用 altool 上传一个已导出的 IPA', flags: { quiet: '不回显 altool 的输出' } },
   release: {
     summary: '整条链：ship + 建版本 + What\'s New + 等构建挂上 + 提审',
     flags: {
       date: '定时发布的日期；不给就是审核通过后手动发布',
       whatsnew: '放 <locale>.txt 的目录；默认 <whatsNew.dir>/<version>，没有就静默跳过',
+      archive: '不再归档，直接导出并上传这个已有的 .xcarchive（导出或上传失败之后从这里接着走）',
       'no-ship': '跳过归档 / 导出 / 上传（构建已经在 App Store Connect 里）',
       'no-submit': '挂上构建就停，不提审',
       yes: '不问确认（不在终端里跑时必须给）',

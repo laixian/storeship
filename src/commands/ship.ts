@@ -49,6 +49,27 @@ export const shipCommand: Command = {
   },
 }
 
+/**
+ * The resume path. Archiving is the slow step (minutes) and export is the one
+ * that fails for reasons outside the project (no Apple ID visible to xcodebuild,
+ * a sandboxed shell, an expired certificate). When it does, the archive is
+ * fine — export it, do not rebuild it.
+ */
+export const exportCommand: Command = {
+  name: 'export',
+  summary: 'export an existing .xcarchive to an IPA (resume here when export failed after a good archive)',
+  usage: 'export <path.xcarchive> [--quiet]',
+  flags: { quiet: 'do not stream xcodebuild output' },
+  booleans: ['quiet'],
+  run: async (ctx) => {
+    const archivePath = ctx.args.at(0, 'path.xcarchive')
+    const project = resolveProject(ctx.cfg)
+    const e = await exportArchive(project, ctx.cfg, archivePath, { quiet: ctx.args.bool('quiet') })
+    ctx.out.emit({ archive: archivePath, ipa: e.ipa, bytes: e.bytes })
+    ctx.out.log(`IPA ready at ${e.ipa} (${mb(e.bytes)}). Upload with \`storeship upload ${e.ipa}\`, or \`storeship release <version> --archive "${archivePath}"\`.`)
+  },
+}
+
 export const uploadCommand: Command = {
   name: 'upload',
   summary: 'upload an already exported IPA with altool',

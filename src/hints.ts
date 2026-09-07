@@ -32,6 +32,13 @@ export const HINTS: Hint[] = [
       'This cannot be read or changed through the API; fix it in App Store Connect (App Information → China mainland ICP) and at the cloud provider that filed it.',
   },
   {
+    test: /No Accounts/,
+    hint:
+      'xcodebuild cannot see an Apple ID signed into Xcode, so -allowProvisioningUpdates cannot fetch the distribution certificate. ' +
+      'Run this from a normal Terminal session as the user who is signed in (Xcode → Settings → Accounts); sandboxed or automation shells do not reach that account. ' +
+      'The archive itself is fine — resume with `storeship export <path.xcarchive>` or `storeship release <version> --archive <path.xcarchive>`.',
+  },
+  {
     test: /Cloud signing permission error|No signing certificate "iOS Distribution" found/i,
     hint:
       'Misleading message. xcodebuild switched to cloud signing, which happens when -authenticationKey* flags are passed to -exportArchive and the key lacks that permission. ' +

@@ -29,10 +29,11 @@ async function confirm(ctx: Ctx, question: string): Promise<void> {
 export const releaseCommand: Command = {
   name: 'release',
   summary: 'the whole thing: ship + version create + whatsnew + attach --wait + submit',
-  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]',
+  usage: 'release <version> [--date YYYY-MM-DD] [--whatsnew DIR] [--archive PATH.xcarchive] [--no-ship] [--no-submit] [--yes] [--quiet] [--force] [--timeout MIN]',
   flags: {
     date: 'scheduled release day; without it the release is manual after approval',
     whatsnew: "directory with <locale>.txt What's New files; default <whatsNew.dir>/<version>, silently skipped when absent",
+    archive: 'export + upload this existing .xcarchive instead of archiving again (resume here when export or upload failed)',
     'no-ship': 'skip archive / export / upload (the build is already in App Store Connect)',
     'no-submit': 'stop after attaching the build',
     yes: 'skip the confirmation (required when not in a terminal)',
@@ -46,6 +47,7 @@ export const releaseCommand: Command = {
     const doShip = !ctx.args.bool('no-ship')
     const doSubmit = !ctx.args.bool('no-submit')
     const date = ctx.args.str('date')
+    const archivePath = ctx.args.str('archive')
     const quiet = ctx.args.bool('quiet')
     const client = ctx.client()
     const appId = ctx.appId()
@@ -63,7 +65,7 @@ export const releaseCommand: Command = {
       // no What's New given: fine, but say so
     }
     const plan = [
-      doShip ? `archive + export + upload ${version} (${pre!.versions.native.build})` : 'skip build/upload (--no-ship)',
+      doShip ? (archivePath ? `export + upload ${archivePath}` : `archive + export + upload ${version} (${pre!.versions.native.build})`) : 'skip build/upload (--no-ship)',
       `version create ${version}${date ? ` scheduled ${date}` : ''} (no-op if it exists)`,
       Object.keys(texts).length ? `What's New for ${Object.keys(texts).join(', ')}` : "no What's New (none given)",
       'attach the newest VALID build (waiting for processing)',
@@ -74,7 +76,7 @@ export const releaseCommand: Command = {
 
     const steps: Record<string, unknown> = {}
     if (doShip && pre) {
-      const a = await archive(pre.project, ctx.cfg, pre.versions, { quiet })
+      const a = archivePath ? { archivePath, version, build: pre.versions.native.build ?? '0' } : await archive(pre.project, ctx.cfg, pre.versions, { quiet })
       const e = await exportArchive(pre.project, ctx.cfg, a.archivePath, { quiet })
       ctx.out.note(`   IPA ${mb(e.bytes)}; uploading`)
       await uploadIpa(e.ipa, need(ctx.cfg.asc.keyId, 'key id', HOW.keyId), need(ctx.cfg.asc.issuerId, 'issuer id', HOW.issuerId), { quiet })

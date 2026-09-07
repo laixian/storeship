@@ -23,7 +23,7 @@ import { offerCommand } from './commands/offer.ts'
 import { releaseCommand } from './commands/release.ts'
 import { previewCommand } from './commands/preview.ts'
 import { reelCommand } from './commands/reel.ts'
-import { shipCommand, uploadCommand } from './commands/ship.ts'
+import { exportCommand, shipCommand, uploadCommand } from './commands/ship.ts'
 import { shotsCommand } from './commands/shots.ts'
 import { simCommand } from './commands/sim.ts'
 import { buildsCommand, versionCommand } from './commands/version.ts'
@@ -35,6 +35,7 @@ const COMMANDS: Command[] = [
   initCommand,
   doctorCommand,
   shipCommand,
+  exportCommand,
   uploadCommand,
   releaseCommand,
   versionCommand,
