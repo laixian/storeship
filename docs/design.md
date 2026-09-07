@@ -139,3 +139,97 @@ tmp；`card.ts` 负责「带洞的前景」（四块背板由工具生成，模�
 | od-mobile 引用方式 | 暂时 `devDependencies: "storeship": "link:../storeship"`（要求旁边仓库已 `pnpm build`）；**发到 npm 后改成 `^0.1.0`** |
 | 一次真实发版用 `storeship release` 走完 | **✅ 2026-09-07 od-mobile 1.3.2 走完**（归档 → 导出 → 上传 → 建版本（定时）→ What's New → attach → listing push → submit，全部对真 ASC）。**0.1.0 在真发版里暴露三条，全部收进 0.1.1**：① 预检拿 Info.plist 的 `$(PRODUCT_BUNDLE_IDENTIFIER)` 占位符比 bundle id → 按 pbxproj 解析；② 导出报 `No Accounts`（Xcode 没登 Apple ID）时只能整条重来 → 加 `export <归档>` 和 `release --archive`，hint 单列；③ attach 拿「最新 VALID 构建」，而刚传的构建几分钟内不在列表里，于是把上一版的构建挂了上去、409 读起来像「没处理完」→ 等指定构建号（`--build`，release 默认用刚构建的）。**教训：假 fetch 单测和只读命令实跑都盖不到「时间」这一维**（构建出现要几分钟、账号会过期），这类只有真跑才知道 |
 | GitHub 仓库 / npm publish | 未做，等 Ken 拍板 |
+
+## 7. 产品即代码（0.2）：订阅组 / 订阅 / 定价 / 可售地区 / App 定价
+
+Ken 2026-09-08 问：「能不能在 ASC 从 0 建 App，以及订阅创建和价格管理？」
+
+### 7.1 边界：为什么不做「建 App 向导」
+
+ASC API **没有** `POST /v1/apps`——App 记录（名称、bundle id、SKU、主要语言）只能在网页上建，
+这一步永远是手点的，五分钟。API 能做的是它前面的 Bundle ID（`bundleIds` / `bundleIdCapabilities`），
+但 Expo prebuild + Xcode 自动签名会在第一次归档时自己注册，工具再做一遍只会撞 409。
+所以「从 0」的顺序固定为：**网页建 App 记录 → `storeship init` → `products push` → `listing push` →
+`shots upload` → `release`**。向导做一半没意义，做「产品即代码」有意义：订阅和定价是每个付费 App
+都要反复碰、网页上又最容易点错的地方，而且形状和 `listing.md` 一模一样。
+
+### 7.2 数据形状（2026-09-08 对 od-mobile 的月付 / 年付实测）
+
+| ASC 对象 | 放什么 | 备注 |
+|---|---|---|
+| `subscriptionGroups` | `referenceName` | 一个 App 可多组；用户同时只持有组内一项 |
+| `subscriptionGroupLocalizations` | `name`（≤30）、`customAppName`、`locale` | 组名是用户在订阅管理页看到的 |
+| `subscriptions` | `name`（内部参考名）、`productId`、`subscriptionPeriod`（ONE_WEEK…ONE_YEAR）、`groupLevel`、`familySharable`、`reviewNote`（≤4000） | `state`：MISSING_METADATA → READY_TO_SUBMIT → WAITING_FOR_REVIEW → APPROVED |
+| `subscriptionLocalizations` | `name`（≤30）、`description`（≤45）、`locale` | 付费墙上显示的 |
+| `subscriptionPricePoints` | 每地区约 800 档，`customerPrice` / `proceeds` | 只读；id 里编码了 (订阅, 地区, 档) |
+| `subscriptionPricePoints/{id}/equalizations` | **一个基准档在其他 174 个地区的等价档** | 网页上「按基准地区自动生成其他地区价格」就是它 |
+| `subscriptionPrices` | 每地区一条，指向一个价格点；`startDate`（null = 现在）、`preserved` | 改价 = 再 POST 一条新的（带 startDate 就是排期） |
+| `subscriptionAvailability` | `availableInNewTerritories` + 175 个地区 | 默认全开 |
+| `subscriptionAppStoreReviewScreenshots` | 一张，md5 在 `sourceFileChecksum` | 和截图同一套 reserve / PUT / commit |
+| `appPriceSchedules` | `baseTerritory` + `manualPrices`（指向 `appPricePoints`） | od-mobile 是免费：CHN 基准、价格点 0.0 |
+| `appAvailabilities`（v2） | `availableInNewTerritories` + `territoryAvailabilities` | 这些 v2 端点**不接受 `limit`**（400 PARAMETER_ERROR.ILLEGAL） |
+
+### 7.3 文件格式：`products.md`（路径 `products.file`，默认 `store/products.md`）
+
+```markdown
+# Products
+
+## app
+- price: CNY 0                 # 基准地区 + 价格；0 = 免费
+- territories: all             # 或逗号分隔的地区码
+
+## group OverDrive Pro          # 订阅组，值是 referenceName
+### en-US
+#### name
+OverDrive Pro
+### zh-Hans
+#### name
+OverDrive Pro会员
+
+## subscription com.overdrive.odmobile.pro.monthly    # 值是 productId（上架后不可改）
+- group: OverDrive Pro
+- reference: Pro 月付
+- period: ONE_MONTH
+- level: 1                     # 组内档位，1 最高
+- familySharable: false
+- price: USD 3.99              # 基准地区 + 价格；其余地区按 Apple 的等价表
+- territories: all
+### en-US
+#### name
+Monthly
+#### description
+AI transcription, room hosting, PDF export
+### zh-Hans
+…
+### reviewNote
+```
+【中文】…
+```
+### reviewScreenshot
+docs/appstore/iap/monthly.png
+```
+
+规则和 `listing.md` 同一套：`##` 开一个对象（`app` / `group <参考名>` / `subscription <productId>`），
+`- key: value` 是它的标量属性，`###` 是语言或长字段，`####` 是语言下的字段，围栏块原样取值。
+`products` 里的别名（`products.monthly = 6802366256`）继续给 `offer` 用；这份文件按 productId 认。
+
+### 7.4 决策清单（续）
+
+| # | 决定 | 理由 |
+|---|------|------|
+| 21 | **Markdown，不是 JSON** | 和 `listing.md` 一个约定，agent 已经会写；描述、审核备注是文本，围栏块比转义友好。标量用 `- key: value`，四级标题只在「语言 → 字段」这一层出现 |
+| 22 | **价格 = 基准地区 + 一个数，其余地区走 `equalizations`** | 这正是 ASC 网页「自动生成」的做法；文件里写 175 行地区价没人维护。对账只比基准地区，外加「有价的地区数」；要手工定某几个地区的价，写 `- prices: JPN 600, KOR 4900` 覆盖 |
+| 23 | **档位按「不高于目标价的最近一档」选**，并打印选中的档 | Apple 的档位是离散的（USA 0.29 → 0.39 → …），写 3.99 正好有；写 4.00 就得选一个，宁可低不高 |
+| 24 | **改价 = POST 新价格，不改旧的**；`- priceStart: YYYY-MM-DD` 排期，不写就立即（对新订户） | 这是 API 的模型，也留下历史。已上架订阅**涨价**会触发 Apple 的用户同意流程，工具只打印提醒，不替人决定 |
+| 25 | **只建、只改，不删**（`products push` 没有删除路径）；`products delete <productId> --yes` 单列，且只对**从未提交**过的订阅有效 | 删了就没了；API 本身也只允许删未提交的。这条命令存在是为了本节的验证：建一个测试订阅再收掉 |
+| 26 | **审核截图按 md5 对账**（`sourceFileChecksum`） | 不然每次 push 都传一遍 |
+| 27 | **可售地区默认全开** + `availableInNewTerritories: true` | 和网页默认一致；要缩就写列表 |
+| 28 | **提交不在这里**：新订阅随 App 版本一起 `version submit` | Apple 规定首个订阅必须和一个新版本一起提审。⚠️ **待验证**：API 里版本提交是否自动带上 READY_TO_SUBMIT 的订阅，还是要在 reviewSubmissionItems 里挂——只能在下一次真发版时看 |
+| 29 | **0.2 不做**：入门 / 促销 / 赢回优惠、非订阅型 IAP、Bundle ID | 优惠码已有 `offer`；其余等有真实需求再做，先把「组 + 订阅 + 定价 + 地区 + 截图」这条主干走通 |
+| 30 | **`products status` 只读打印 ASC 现状**（组、订阅、状态、基准地区价、地区数、截图有无） | 和 `version status` 同一个作用：先看再改 |
+
+### 7.5 验证计划
+
+- **读路径**：od-mobile 的 `products.md` 照现状写（一组两订阅 + 免费 App），`products diff` 必须是空的。这是解析器和字段映射的合同。
+- **写路径**：在 od-mobile 的账号里建一个一次性的组 `storeship-test` + 周付订阅 `com.overdrive.odmobile.test.weekly`：push（建组、建订阅、两种语言、USD 0.99 等价到全部地区、可售地区、截图），`status` 核对，然后 `products delete … --yes` 收掉。它从未提交，用户永远看不到。
+- **App 定价**：od-mobile 免费，只验 diff 为空；改价路径留到有付费 App 时。
