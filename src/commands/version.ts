@@ -98,15 +98,20 @@ export const versionCommand: Command = {
       name: 'watch',
       summary: 'poll until the review reaches a verdict; exit 0 approved, 3 rejected, 4 no decision yet',
       usage: 'version watch <version> [--interval MIN] [--timeout MIN] [--once]',
-      flags: { interval: 'minutes between polls; default 10', timeout: 'minutes to keep watching; default 1440 (24 h)', once: 'check once and exit instead of polling' },
+      flags: { interval: 'minutes between polls; default 10, floor 2 (a review state does not change faster than that)', timeout: 'minutes to keep watching; default 1440 (24 h)', once: 'check once and exit instead of polling' },
       booleans: ['once'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
+        // Floor the interval here rather than in the library: three requests a poll at
+        // two minutes is still only ~90 an hour against Apple's 3600, and nothing about
+        // a review moves faster than that.
+        const interval = Math.max(2, ctx.args.num('interval', 10))
         const snap = await watchVersion(ctx.client(), ctx.appId(), version, {
-          intervalMs: ctx.args.num('interval', 10) * 60_000,
+          intervalMs: interval * 60_000,
           timeoutMs: ctx.args.num('timeout', 1440) * 60_000,
           once: ctx.args.bool('once'),
           onPoll: (s, changed) => ctx.out.note(`${s.versionState}${s.submissionState ? ` / submission ${s.submissionState}` : ''}${changed ? '  ← changed' : ''}`),
+          onRetry: (status, attempt) => ctx.out.note(`   ${status === 429 ? 'throttled' : `server error ${status}`}; backing off (${attempt}/5)`),
         })
         ctx.out.emit(snap)
         const rejectedItems = snap.items.filter((i) => i.state === 'REJECTED')

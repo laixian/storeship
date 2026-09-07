@@ -213,7 +213,7 @@ Usage: `storeship version watch <version> [--interval MIN] [--timeout MIN] [--on
 
 | Flags | |
 |---|---|
-| `--interval` | minutes between polls; default 10 |
+| `--interval` | minutes between polls; default 10, floor 2 (a review state does not change faster than that) |
 | `--timeout` | minutes to keep watching; default 1440 (24 h) |
 | `--once` | check once and exit instead of polling |
 

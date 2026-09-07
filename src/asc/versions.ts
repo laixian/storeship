@@ -6,7 +6,7 @@
  * and whether a re-submit will be accepted is only known at re-submit time
  * (account-level validations run then). Submit first, cancel only if needed.
  */
-import { type AscClient, ok } from './client.ts'
+import { AscError, type AscClient, ok } from './client.ts'
 import { StoreshipError } from '../errors.ts'
 
 export type VersionRow = {
@@ -257,22 +257,44 @@ export async function readWatchSnapshot(c: AscClient, appId: string, version: st
   return snap
 }
 
-/** Poll until the verdict is no longer `pending`, or the deadline passes. */
+/**
+ * Poll until the verdict is no longer `pending`, or the deadline passes.
+ *
+ * One poll is three GETs at most (the version, the open submissions, the items of
+ * the one carrying this version), so the 10-minute default is ~18 requests an hour
+ * against a 3600/hour limit. The floor on `--interval` lives in the command, and a
+ * 429 or a 5xx backs off instead of ending the watch — a run that gives up after
+ * one bad response is worse than useless when it is meant to sit there for a day.
+ */
 export async function watchVersion(
   c: AscClient,
   appId: string,
   version: string,
-  opts: { intervalMs?: number; timeoutMs?: number; once?: boolean; onPoll?: (s: WatchSnapshot, changed: boolean) => void; sleep?: (ms: number) => Promise<void> } = {},
+  opts: { intervalMs?: number; timeoutMs?: number; once?: boolean; onPoll?: (s: WatchSnapshot, changed: boolean) => void; onRetry?: (status: number, attempt: number) => void; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<WatchSnapshot> {
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
+  const interval = opts.intervalMs ?? 10 * 60_000
   const deadline = Date.now() + (opts.timeoutMs ?? 24 * 60 * 60_000)
   let last = ''
+  let failures = 0
   for (;;) {
-    const snap = await readWatchSnapshot(c, appId, version)
+    let snap: WatchSnapshot
+    try {
+      snap = await readWatchSnapshot(c, appId, version)
+      failures = 0
+    } catch (e) {
+      const status = e instanceof AscError ? e.result.status : 0
+      // Throttled or Apple having a moment: wait longer and carry on. Anything else
+      // (a bad key, a version that does not exist) is real and ends the watch.
+      if ((status !== 429 && status < 500) || ++failures > 5 || opts.once) throw e
+      opts.onRetry?.(status, failures)
+      await sleep(Math.min(interval * failures, 30 * 60_000))
+      continue
+    }
     const key = `${snap.versionState}|${snap.submissionState ?? ''}|${snap.items.map((i) => i.state).join(',')}`
     opts.onPoll?.(snap, last !== '' && key !== last)
     last = key
-    if (snap.verdict !== 'pending' || opts.once || Date.now() + (opts.intervalMs ?? 10 * 60_000) > deadline) return snap
-    await sleep(opts.intervalMs ?? 10 * 60_000)
+    if (snap.verdict !== 'pending' || opts.once || Date.now() + interval > deadline) return snap
+    await sleep(interval)
   }
 }

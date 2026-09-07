@@ -21,7 +21,9 @@ function fake(routes: Record<string, Route>): { client: ReturnType<typeof create
     const r = Object.entries(routes).find(([k]) => (k.startsWith('^') ? new RegExp(k).test(key) : key.startsWith(k)))
     if (!r) return new Response(JSON.stringify({ errors: [{ detail: `no route for ${key}` }] }), { status: 404 })
     const body = await r[1](url, init)
-    return new Response(JSON.stringify(body), { status: init?.method === 'POST' ? 201 : 200 })
+    // A route can force a status by putting `__status` in what it returns.
+    const status = (body as any)?.__status ?? (init?.method === 'POST' ? 201 : 200)
+    return new Response(JSON.stringify(body), { status })
   }
   return { client: createClient({ keyId: 'K', issuerId: 'I', keyPem: pem, fetch: fetchLike }), log }
 }
@@ -232,5 +234,34 @@ describe('watching a review', () => {
     const snap = await watchVersion(client, 'A', '1.0', { once: true })
     assert.equal(snap.verdict, 'approved')
     assert.equal(snap.submissionId, undefined)
+  })
+})
+
+describe('watch backs off instead of dying', () => {
+  const versionRoute = { 'GET /v1/apps/A/appStoreVersions': () => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: 'IN_REVIEW', platform: 'IOS' } }] }) }
+  it('retries a 429 with a growing wait, then carries on', async () => {
+    let calls = 0
+    const { client } = fake({
+      ...versionRoute,
+      'GET /v1/apps/A/reviewSubmissions': () => (++calls <= 2 ? { __status: 429, errors: [{ detail: 'rate limit' }] } : { data: [] }),
+    })
+    const waits: number[] = []
+    const retries: number[] = []
+    const snap = await watchVersion(client, 'A', '1.0', {
+      intervalMs: 1000,
+      timeoutMs: 60_000,
+      sleep: async (ms) => void waits.push(ms),
+      onRetry: (_s, attempt) => retries.push(attempt),
+      onPoll: (s) => {
+        if (s.verdict === 'pending') throw new Error('stop')
+      },
+    }).catch((e) => e)
+    assert.equal((snap as Error).message, 'stop', 'reached a real poll after the throttling')
+    assert.deepEqual(retries, [1, 2])
+    assert.deepEqual(waits, [1000, 2000], 'the wait grows with each consecutive failure')
+  })
+  it('gives up on an error that will not fix itself', async () => {
+    const { client } = fake({ ...versionRoute, 'GET /v1/apps/A/reviewSubmissions': () => ({ __status: 401, errors: [{ detail: 'NOT_AUTHORIZED' }] }) })
+    await assert.rejects(watchVersion(client, 'A', '1.0', { intervalMs: 1, sleep: async () => {} }), /NOT_AUTHORIZED/)
   })
 })
