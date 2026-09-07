@@ -1,6 +1,6 @@
 {
   "name": "storeship",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Ship an Expo / React Native iOS app to the App Store from your Mac: archive, export, upload, metadata, media, review submission, offer codes. Zero dependencies, the traps encoded as guardrails.",
   "license": "MIT",
   "type": "module",

@@ -136,5 +136,5 @@ tmp；`card.ts` 负责「带洞的前景」（四块背板由工具生成，模�
 | `npm pack` 装进空目录、从 od-mobile 目录跑 | `version status` / `skill list` / `shots check` 都通过 dist 跑通（决策 #2 成立） |
 | README 例子用假 id | 已换 |
 | od-mobile 引用方式 | 暂时 `devDependencies: "storeship": "link:../storeship"`（要求旁边仓库已 `pnpm build`）；**发到 npm 后改成 `^0.1.0`** |
-| 一次真实发版用 `storeship release` 走完 | **未做**——写路径仍只有假 fetch 单测，这是发 0.1.0 之前最后一道门 |
+| 一次真实发版用 `storeship release` 走完 | **进行中（od-mobile 1.3.2，2026-09-07）**。0.1.0 先发了再验：第一步预检就拦住——Info.plist 的 `CFBundleIdentifier` 是 `$(PRODUCT_BUNDLE_IDENTIFIER)` 占位符，工具拿它和配置比，报 bundle id mismatch。0.1.1 改为按 pbxproj 里 INFOPLIST_FILE 指向这份 plist 的构建配置解析 `$(VAR)`（优先 `ios.configuration`，Debug/Release 不一致且没指定就放弃比较）。**这是拿 Expo 生成的工程测出来的，说明 0.1.0 之前那些「假 fetch 单测 + 只读命令实跑」盖不到 `ship` 的预检**——写路径每一条都得这样真跑一次 |
 | GitHub 仓库 / npm publish | 未做，等 Ken 拍板 |

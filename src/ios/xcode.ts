@@ -12,7 +12,7 @@
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { type Config, HOW, need } from '../config.ts'
 import { StoreshipError } from '../errors.ts'
 import { capture, must, run } from '../proc.ts'
@@ -46,6 +46,48 @@ export function plistGet(plist: string, key: string): string | undefined {
   return capture('/usr/libexec/PlistBuddy', ['-c', `Print :${key}`, plist])
 }
 
+/**
+ * Info.plist values are often build-setting references — `$(PRODUCT_BUNDLE_IDENTIFIER)`,
+ * `$(MARKETING_VERSION)`, `$(CURRENT_PROJECT_VERSION)` — that Xcode substitutes at build
+ * time from project.pbxproj. Resolve one against the build configuration(s) whose
+ * INFOPLIST_FILE is this plist; prefer `configuration` (Debug and Release may differ,
+ * e.g. a `.dev` bundle id), else accept a value all of them agree on. `undefined` when
+ * it cannot be resolved, so the caller compares nothing rather than a placeholder.
+ * (2026-09-07: the first real `release` refused with
+ * "bundle id mismatch: config says com.overdrive.odmobile, ios/ says $(PRODUCT_BUNDLE_IDENTIFIER)".)
+ */
+export function resolveBuildSetting(value: string | undefined, pbxproj: string, infoPlistRel: string, configuration?: string): string | undefined {
+  if (value === undefined) return undefined
+  const ref = /^\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]$/.exec(value)
+  if (!ref) return value
+  const name = ref[1]!
+  const norm = (s: string) => s.replace(/^"|"$/g, '').replace(/^\.\//, '')
+  const setting = (body: string, key: string): string | undefined => {
+    const m = new RegExp(`^\\s*${key} = ("([^"]*)"|([^;]*));`, 'm').exec(body)
+    return m ? (m[2] ?? m[3] ?? '').trim() : undefined
+  }
+  const byConfig = new Map<string, string>()
+  for (const m of pbxproj.matchAll(/buildSettings = \{([\s\S]*?)\n\s*\};\s*name = "?([^";]+)"?;/g)) {
+    const body = m[1]!
+    const plist = setting(body, 'INFOPLIST_FILE')
+    if (plist === undefined || norm(plist) !== norm(infoPlistRel)) continue
+    const v = setting(body, name)
+    if (v !== undefined) byConfig.set(m[2]!, v)
+  }
+  if (configuration && byConfig.has(configuration)) return byConfig.get(configuration)
+  const distinct = new Set(byConfig.values())
+  return distinct.size === 1 ? [...distinct][0] : undefined
+}
+
+/** project.pbxproj next to the workspace, if there is exactly one .xcodeproj. */
+function pbxprojFor(p: Project): { text: string; infoPlistRel: string } | undefined {
+  const iosDir = dirname(p.workspace)
+  const projs = existsSync(iosDir) ? readdirSync(iosDir).filter((f) => f.endsWith('.xcodeproj')) : []
+  const candidates = projs.map((f) => join(iosDir, f, 'project.pbxproj')).filter(existsSync)
+  if (candidates.length !== 1) return undefined
+  return { text: readFileSync(candidates[0]!, 'utf8'), infoPlistRel: relative(iosDir, p.infoPlist) }
+}
+
 export type ExpoConfig = { name?: string; version?: string; ios?: { bundleIdentifier?: string; buildNumber?: string; appleTeamId?: string } }
 
 /** `expo config --type public --json`, tolerant of noise before the JSON. */
@@ -70,10 +112,15 @@ export type Versions = {
 export async function readVersions(p: Project): Promise<Versions> {
   const problems: string[] = []
   if (!existsSync(p.infoPlist)) problems.push(`Info.plist not found at ${p.infoPlist}${p.expo ? ' — run `npx expo prebuild`' : ''}`)
+  const pbx = pbxprojFor(p)
+  const read = (key: string) => {
+    const raw = plistGet(p.infoPlist, key)
+    return pbx ? resolveBuildSetting(raw, pbx.text, pbx.infoPlistRel, p.configuration) : raw
+  }
   const native = {
-    version: plistGet(p.infoPlist, 'CFBundleShortVersionString'),
-    build: plistGet(p.infoPlist, 'CFBundleVersion'),
-    bundleId: plistGet(p.infoPlist, 'CFBundleIdentifier'),
+    version: read('CFBundleShortVersionString'),
+    build: read('CFBundleVersion'),
+    bundleId: read('CFBundleIdentifier'),
   }
   let expo: Versions['expo']
   if (p.expo) {
