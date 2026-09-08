@@ -17,6 +17,11 @@ const T = {
     inherited: 'inherited from',
     sub: 'Subcommands',
     usage: 'Usage',
+    impact: 'Impact',
+    needs: 'needs',
+    human: 'The human decides',
+    irreversible: 'Irreversible',
+    words: { read: 'read — changes nothing', write: 'write', irreversible: 'irreversible — refuses to run without `--yes`' } as Record<string, string>,
   },
   zh: {
     title: '# 命令参考',
@@ -26,16 +31,21 @@ const T = {
     inherited: '继承自',
     sub: '子命令',
     usage: '用法',
+    impact: '影响面',
+    needs: '依赖',
+    human: '由人决定',
+    irreversible: '不可撤销',
+    words: { read: '只读 —— 什么都不改', write: '会写', irreversible: '不可撤销 —— 不给 `--yes` 就拒绝执行' } as Record<string, string>,
   },
 }
 
 const esc = (s: string): string => s.replace(/\|/g, '\\|')
 
-function text(path: string, cmd: Command, lang: Lang): { summary: string; flags: Record<string, string> } {
+function text(path: string, cmd: Command, lang: Lang): { summary: string; flags: Record<string, string>; human: string[] } {
   const zh: ZhEntry | undefined = lang === 'zh' ? ZH[path] : undefined
   const flags: Record<string, string> = {}
   for (const [k, v] of Object.entries(cmd.flags ?? {})) flags[k] = zh?.flags?.[k] ?? v
-  return { summary: zh?.summary ?? cmd.summary, flags }
+  return { summary: zh?.summary ?? cmd.summary, flags, human: zh?.human ?? cmd.humanDecisions ?? [] }
 }
 
 function flagTable(flags: Record<string, string>, t: (typeof T)['en']): string[] {
@@ -47,9 +57,13 @@ function flagTable(flags: Record<string, string>, t: (typeof T)['en']): string[]
 function section(cmd: Command, path: string[], depth: number, lang: Lang, inherited: { from: string; flags: Record<string, string> }[]): string[] {
   const t = T[lang]
   const key = path.join(' ')
-  const { summary, flags } = text(key, cmd, lang)
+  const { summary, flags, human } = text(key, cmd, lang)
   const out = ['', `${'#'.repeat(depth)} \`${key}\``, '', summary]
   if (cmd.usage || !cmd.sub) out.push('', `${t.usage}: \`storeship ${cmd.usage ?? key}\``)
+  const impact = cmd.impact ?? 'read'
+  out.push('', `${t.impact}: ${t.words[impact]}${cmd.needs?.length ? ` · ${t.needs}: ${cmd.needs.join(', ')}` : ''}`)
+  if (cmd.confirm) out.push('', `${t.irreversible}: ${esc(cmd.confirm)}`)
+  if (human.length) out.push('', `${t.human}: ${human.map(esc).join('; ')}`)
   out.push(...flagTable(flags, t))
   for (const inh of inherited) if (Object.keys(inh.flags).length) out.push('', `${t.flags} (${t.inherited} \`${inh.from}\`):`, ...flagTable(inh.flags, t).slice(1))
   if (cmd.sub) {

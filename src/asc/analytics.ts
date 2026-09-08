@@ -46,11 +46,11 @@ export async function fetchReport(c: AscClient, appId: string, name: string, gra
       break
     }
   }
-  if (!found) throw new StoreshipError(`no report named "${name}"`, 'run `storeship analytics list` for the names')
+  if (!found) throw new StoreshipError(`no report named "${name}"`, 'run `storeship analytics list` for the names', { code: 'NOT_FOUND' })
   const inst = (await c.all(`/v1/analyticsReports/${found.id}/instances?filter[granularity]=${granularity}&limit=200`)).sort((a, b) =>
     String(b.attributes.processingDate).localeCompare(String(a.attributes.processingDate)),
   )
-  if (!inst.length) throw new StoreshipError(`"${name}" has no ${granularity} instances yet`, 'Apple produces data the day after the request')
+  if (!inst.length) throw new StoreshipError(`"${name}" has no ${granularity} instances yet`, 'Apple produces data the day after the request', { code: 'PENDING' })
   const rows: string[][] = []
   for (const s of await c.all(`/v1/analyticsReportInstances/${inst[0].id}/segments`)) {
     const res = await fetch(s.attributes.url)
@@ -65,7 +65,7 @@ export async function salesReport(c: AscClient, vendorNumber: string, date?: str
   const res = await c.raw(
     `/v1/salesReports?filter[frequency]=DAILY&filter[reportSubType]=SUMMARY&filter[reportType]=SALES&filter[vendorNumber]=${vendorNumber}&filter[reportDate]=${day}`,
   )
-  if (res.status !== 200) throw new StoreshipError(`sales report: ${res.status} ${(await res.text()).slice(0, 400)}`)
+  if (res.status !== 200) throw new StoreshipError(`sales report: ${res.status} ${(await res.text()).slice(0, 400)}`, undefined, { code: 'API' })
   // gzip binary: never go through res.text()
   return { date: day, rows: tsv(inflate(Buffer.from(await res.arrayBuffer()))) }
 }

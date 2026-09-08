@@ -37,7 +37,7 @@ export async function findVersion(c: AscClient, appId: string, version: string):
 
 export async function requireVersion(c: AscClient, appId: string, version: string): Promise<VersionRow> {
   const v = await findVersion(c, appId, version)
-  if (!v) throw new StoreshipError(`no App Store version ${version}`, `create it with \`storeship version create ${version}\``)
+  if (!v) throw new StoreshipError(`no App Store version ${version}`, `create it with \`storeship version create ${version}\``, { code: 'NOT_FOUND' })
   return v
 }
 
@@ -55,7 +55,7 @@ export async function createVersion(
   if (existing) return { created: false, row: existing }
   const attributes: Record<string, unknown> = { platform: opts.platform ?? 'IOS', versionString: version }
   if (opts.date) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) throw new StoreshipError(`release date must be YYYY-MM-DD, got "${opts.date}"`)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.date)) throw new StoreshipError(`release date must be YYYY-MM-DD, got "${opts.date}"`, undefined, { code: 'USAGE' })
     attributes.releaseType = 'SCHEDULED'
     attributes.earliestReleaseDate = `${opts.date}T${opts.scheduledTime ?? '00:00:00Z'}`
   }
@@ -140,13 +140,32 @@ export async function attachLatestBuild(
       return { build, attached: true }
     }
     if (!opts.wait) {
-      if (!build) throw new StoreshipError(want ? `build ${want} is not in App Store Connect yet` : 'no builds in the account yet', want ? 'processing takes minutes after upload; retry, or use --wait' : 'upload one first: `storeship ship`')
+      if (!build)
+        throw new StoreshipError(
+          want ? `build ${want} is not in App Store Connect yet` : 'no builds in the account yet',
+          want ? 'processing takes minutes after upload; retry, or use --wait' : 'upload one first: `storeship ship`',
+          { code: want ? 'BUILD_NOT_PROCESSED' : 'NOT_FOUND' },
+        )
       return { build, attached: false }
     }
     opts.onWait?.(build)
-    if (Date.now() > deadline) throw new StoreshipError(`gave up waiting for ${want ? `build ${want}` : 'a build'} to become VALID after ${Math.round((opts.timeoutMs ?? 30 * 60_000) / 60_000)} min`, 'check `storeship builds`; a build that fails processing gets an email from Apple, not a state change')
+    if (Date.now() > deadline)
+      throw new StoreshipError(
+        `gave up waiting for ${want ? `build ${want}` : 'a build'} to become VALID after ${Math.round((opts.timeoutMs ?? 30 * 60_000) / 60_000)} min`,
+        'check `storeship builds`; a build that fails processing gets an email from Apple, not a state change',
+        { code: 'TIMEOUT' },
+      )
     await sleep(opts.intervalMs ?? 30_000)
   }
+}
+
+/** The build currently attached to a version, if any. ASC answers 200 with a null data for "none". */
+export async function attachedBuild(c: AscClient, versionId: string): Promise<BuildRow | undefined> {
+  const r = await c.get(`/v1/appStoreVersions/${versionId}/build`)
+  if (r.status === 404) return undefined
+  if (r.status !== 200) throw new AscError(r, `read the build attached to ${versionId}`)
+  const b = r.json?.data
+  return b ? { id: b.id, version: String(b.attributes?.version), processingState: b.attributes?.processingState, uploadedDate: b.attributes?.uploadedDate } : undefined
 }
 
 const OPEN = 'READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW'

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Command, type Ctx } from '../ctx.ts'
-import { StoreshipError, UsageError } from '../errors.ts'
+import { CheckFailed, StoreshipError, UsageError } from '../errors.ts'
 import { must } from '../proc.ts'
 import { checkShots } from '../shots/check.ts'
 import { loadShots, type ShotsSetup } from '../shots/load.ts'
@@ -40,19 +40,21 @@ function report(ctx: Ctx, problems: Record<string, string[]>): void {
 export const shotsCommand: Command = {
   name: 'shots',
   summary: 'App Store screenshots: validate, render from real screenshots + template, contact sheet, upload by device type',
+  impact: 'read',
   sub: [
     {
       name: 'check',
       summary: 'validate content, sources, crops for every device (all problems at once)',
       usage: 'shots check [--device a,b] [--locale x,y]',
       flags: { device: 'comma list of device ids; default: every device the content lays out (or shots.devices)', locale: 'comma list of locales; default: the configured ones' },
+      impact: 'read',
       run: async (ctx) => {
         const s = await loadShots(ctx.cfg)
         const { devices, locales } = selection(ctx, s)
         const problems = runChecks(ctx, s, devices, locales)
         ctx.out.emit({ shots: s.content.shots.length, devices: devices.map((d) => d.id), locales, problems })
         report(ctx, problems)
-        if (Object.keys(problems).length) throw new StoreshipError('shots check failed', 'fix every line above; nothing was rendered')
+        if (Object.keys(problems).length) throw new CheckFailed('shots check failed', 'fix every line above; nothing was rendered')
         ctx.out.log(`ok: ${s.content.shots.length} shots × ${devices.map((d) => d.id).join(', ')} × ${locales.join(', ')}`)
       },
     },
@@ -62,13 +64,15 @@ export const shotsCommand: Command = {
       usage: 'shots render [--device a,b] [--locale x,y] [--only 1,2] [--sheet]',
       flags: { device: 'comma list of device ids', locale: 'comma list of locales', only: 'comma list of shot numbers to re-render', sheet: 'also write a contact sheet per device × locale into the temp dir' },
       booleans: ['sheet'],
+      impact: 'write',
+      needs: ['chrome'],
       run: async (ctx) => {
         const s = await loadShots(ctx.cfg)
         const { devices, locales, only } = selection(ctx, s)
         const problems = runChecks(ctx, s, devices, locales)
         if (Object.keys(problems).length) {
           report(ctx, problems)
-          throw new StoreshipError('shots check failed', 'fix every line above; nothing was rendered')
+          throw new CheckFailed('shots check failed', 'fix every line above; nothing was rendered')
         }
         const chrome = findChrome(ctx.cfg.chrome)
         mkdirSync(s.out, { recursive: true })
@@ -100,6 +104,7 @@ export const shotsCommand: Command = {
           }
         }
         ctx.out.emit({ out: s.out, files: made, sheets })
+        ctx.out.changed(...made.map((m) => ({ kind: 'screenshot', target: `${m.device}/${m.locale}`, what: 'rendered', detail: m.file })))
         ctx.out.log(`\n→ ${s.out}${sheets.length ? '\nopen the contact sheet(s) and look at the row — that is the acceptance test' : ''}`)
       },
     },
@@ -109,6 +114,8 @@ export const shotsCommand: Command = {
       usage: 'shots upload <version> [--device a,b] [--locale x,y] [--replace] [--dry-run]',
       flags: { device: 'comma list of device ids', locale: 'comma list of locales', replace: 'delete every screenshot in the set first', 'dry-run': 'show what would be uploaded, touch nothing' },
       booleans: ['replace', 'dry-run'],
+      impact: 'write',
+      needs: ['credentials'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
         const s = await loadShots(ctx.cfg)
@@ -118,18 +125,20 @@ export const shotsCommand: Command = {
           for (const d of devices) {
             const files = s.content.shots.map((shot) => s.outFile(d, locale, shot))
             const missing = files.filter((f) => !existsSync(f))
-            if (missing.length) throw new StoreshipError(`not rendered yet: ${missing.map((f) => f.replace(ctx.cfg.root + '/', '')).join(', ')}`, 'run `storeship shots render` first')
+            if (missing.length) throw new StoreshipError(`not rendered yet: ${missing.map((f) => f.replace(ctx.cfg.root + '/', '')).join(', ')}`, 'run `storeship shots render` first', { code: 'CHECK_FAILED' })
             groups.push({ locale, displayType: d.displayType, files })
           }
         }
+        const dry = ctx.dryRun()
         const plans = await uploadShots(ctx.client(), ctx.appId(), version, groups, {
           replace: ctx.args.bool('replace'),
-          dryRun: ctx.args.bool('dry-run'),
+          dryRun: dry,
           onFile: (f) => ctx.out.note(`  ↑ ${f.replace(ctx.cfg.root + '/', '')}`),
         })
         ctx.out.emit(plans)
+        ctx.out.changed(...plans.flatMap((p) => p.files.map((f) => ({ kind: 'screenshot', target: `${p.locale}/${p.displayType}`, what: dry ? 'would upload' : 'uploaded', detail: f }))))
         for (const p of plans)
-          ctx.out.log(`${p.locale} ${p.displayType} set=${p.setId}${p.created ? ' (created)' : ''}: ${p.files.length} ${ctx.args.bool('dry-run') ? 'to upload' : 'uploaded'}, ${p.skipped.length} already there${p.deleted ? `, ${p.deleted} deleted` : ''}`)
+          ctx.out.log(`${p.locale} ${p.displayType} set=${p.setId}${p.created ? ' (created)' : ''}: ${p.files.length} ${dry ? 'to upload' : 'uploaded'}, ${p.skipped.length} already there${p.deleted ? `, ${p.deleted} deleted` : ''}`)
       },
     },
     {
@@ -137,9 +146,11 @@ export const shotsCommand: Command = {
       summary: "run the project's demo-data script against the simulator (args passed through)",
       usage: 'shots seed [-- args…]',
       flags: {},
+      impact: 'write',
+      needs: ['simulator'],
       run: async (ctx) => {
         const script = ctx.cfg.shots.seed
-        if (!script) throw new StoreshipError('shots.seed is not configured', 'point it at a script that plants demo data in the simulator sandbox')
+        if (!script) throw new StoreshipError('shots.seed is not configured', 'point it at a script that plants demo data in the simulator sandbox', { code: 'CONFIG' })
         await must('node', [script, ...ctx.args.positional], 'seed')
         ctx.out.emit({ script, args: ctx.args.positional })
       },

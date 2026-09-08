@@ -1,16 +1,21 @@
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { EXIT } from '../codes.ts'
 import { type Command } from '../ctx.ts'
 import { capture, which } from '../proc.ts'
 import { resolveProject, xcodeAccounts } from '../ios/xcode.ts'
 import { FFMPEG_HINT, findFfmpeg } from '../preview/ffmpeg.ts'
 import { findChrome } from '../shots/render.ts'
 import { findIdb } from '../sim/sim.ts'
+import { VERSION } from '../meta.ts'
+import { stampOf } from '../skills/sync.ts'
 
 type Check = { name: string; ok: boolean; detail: string; fix?: string }
 
 export const doctorCommand: Command = {
   name: 'doctor',
-  summary: 'check the machine, the config and the API key; explains each miss',
+  summary: 'check the machine, the config and the API key; explains each miss (exit 3 when something is missing)',
+  impact: 'read',
   run: async (ctx) => {
     const cfg = ctx.cfg
     const checks: Check[] = []
@@ -68,11 +73,22 @@ export const doctorCommand: Command = {
       /* reported below */
     }
     add('ffmpeg (optional)', !!ffmpeg, ffmpeg ?? 'missing', `needed only for \`preview\` / \`reel\`; ${FFMPEG_HINT}`)
+    // Installed skills are copies, so they go stale silently on an upgrade.
+    const skillDir = join(cfg.root, '.claude', 'skills')
+    if (existsSync(skillDir)) {
+      const mine = readdirSync(skillDir).filter((n) => n.startsWith('storeship-') && existsSync(join(skillDir, n, 'SKILL.md')))
+      const stale = mine.filter((n) => stampOf(readFileSync(join(skillDir, n, 'SKILL.md'), 'utf8')) !== VERSION)
+      if (mine.length)
+        add('agent skills (optional)', stale.length === 0, stale.length ? `${stale.join(', ')} generated for another version` : `${mine.length} at ${VERSION}`, 'run `storeship skill install` again after upgrading; `storeship skill check --dir .claude/skills` lists what drifted')
+    }
 
     ctx.out.emit(checks)
     for (const c of checks) ctx.out.log(`${c.ok ? '✓' : '✗'} ${c.name.padEnd(20)} ${c.detail}${!c.ok && c.fix ? `\n      → ${c.fix}` : ''}`)
     const bad = checks.filter((c) => !c.ok && !c.name.includes('optional'))
-    if (bad.length) process.exitCode = 1
+    // Problems found is an answer, not a crash: exit 3, so "doctor failed to run"
+    // stays distinguishable from "doctor says something is wrong".
+    if (bad.length) process.exitCode = EXIT.no
+    else ctx.out.next({ command: 'storeship state', why: 'the environment is fine; this says where the release is and what to run next', impact: 'read' })
     ctx.out.log(bad.length ? `\n${bad.length} problem(s)` : '\nall good')
   },
 }

@@ -1,7 +1,7 @@
 {
   "name": "storeship",
-  "version": "0.2.2",
-  "description": "Ship an Expo / React Native iOS app to the App Store from your Mac: archive, export, upload, metadata, media, review submission, offer codes. Zero dependencies, the traps encoded as guardrails.",
+  "version": "0.3.0",
+  "description": "Ship an Expo / React Native iOS app to the App Store from your Mac, built for an agent to drive: one JSON envelope, stable error codes, `state` says what to run next. Archive, export, upload, metadata, media, review submission, offer codes. Zero dependencies.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -20,6 +20,9 @@
   },
   "keywords": [
     "app-store-connect",
+    "agent",
+    "claude-code",
+    "ai-agent",
     "expo",
     "react-native",
     "ios",
@@ -32,7 +35,9 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/sim/sim-hid.swift dist/sim/ && cp src/reel/*.swift dist/reel/ && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
-    "prepublishOnly": "pnpm build && pnpm test",
+    "check": "pnpm typecheck && pnpm test && node src/cli.ts docs --check docs/commands.md && node src/cli.ts docs --lang zh --check docs/zh/commands.md && node src/cli.ts skill sync --check && node src/cli.ts skill check",
+    "gen": "node src/cli.ts docs > docs/commands.md && node src/cli.ts docs --lang zh > docs/zh/commands.md && node src/cli.ts skill sync",
+    "prepublishOnly": "pnpm build && pnpm check",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {

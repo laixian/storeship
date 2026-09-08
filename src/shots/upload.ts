@@ -23,7 +23,7 @@ export async function uploadShots(
   const plans: UploadPlan[] = []
   for (const g of groups) {
     const loc = locs.find((l) => l.locale === g.locale)
-    if (!loc) throw new StoreshipError(`${g.locale} is not a localization of ${version}`, 'add the language in App Store Connect → App Information first')
+    if (!loc) throw new StoreshipError(`${g.locale} is not a localization of ${version}`, 'add the language in App Store Connect → App Information first', { code: 'NOT_FOUND' })
     const sets = await c.all(`/v1/appStoreVersionLocalizations/${loc.id}/appScreenshotSets?limit=50`)
     let set = sets.find((s: any) => s.attributes.screenshotDisplayType === g.displayType)
     let created = false

@@ -60,7 +60,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { AscError, type AscClient, ok } from './client.ts'
-import { StoreshipError } from '../errors.ts'
+import { CheckFailed, ConfigError } from '../errors.ts'
 import { len } from './listing.ts'
 
 export const PERIODS = ['ONE_WEEK', 'ONE_MONTH', 'TWO_MONTHS', 'THREE_MONTHS', 'SIX_MONTHS', 'ONE_YEAR'] as const
@@ -104,9 +104,9 @@ function unfence(raw: string): string {
 
 export function parsePrice(s: string, where: string): Price {
   const m = /^([A-Z]{3})\s+(\d+(?:\.\d+)?)$/.exec(s.trim())
-  if (!m) throw new StoreshipError(`${where}: price must be "<TERRITORY> <amount>", e.g. "USA 3.99" or "CHN 12", got "${s}"`)
+  if (!m) throw new CheckFailed(`${where}: price must be "<TERRITORY> <amount>", e.g. "USA 3.99" or "CHN 12", got "${s}"`)
   const currency = CURRENCY_TO_TERRITORY[m[1]!]
-  if (currency) throw new StoreshipError(`${where}: "${m[1]}" is a currency; prices are per territory (ISO 3166 alpha-3)`, `write "${currency} ${m[2]}"`)
+  if (currency) throw new CheckFailed(`${where}: "${m[1]}" is a currency; prices are per territory (ISO 3166 alpha-3)`, `write "${currency} ${m[2]}"`)
   return { territory: m[1]!, amount: m[2]! }
 }
 
@@ -161,9 +161,9 @@ export function parseCatalog(md: string, where = 'products'): Catalog {
     const kv = /^-\s+([A-Za-z]+)\s*:\s*(.*)$/.exec(line)
     if (h4) {
       flush()
-      if (!block || !locale) throw new StoreshipError(`${at(i)}: "#### ${h4[1]}" must be under a "### <locale>" heading`)
+      if (!block || !locale) throw new CheckFailed(`${at(i)}: "#### ${h4[1]}" must be under a "### <locale>" heading`)
       const f = h4[1]!
-      if (f !== 'name' && f !== 'description' && f !== 'customAppName') throw new StoreshipError(`${at(i)}: unknown localized field "${f}"`, 'fields are: name, description (subscriptions), customAppName (groups)')
+      if (f !== 'name' && f !== 'description' && f !== 'customAppName') throw new CheckFailed(`${at(i)}: unknown localized field "${f}"`, 'fields are: name, description (subscriptions), customAppName (groups)')
       field = f
       continue
     }
@@ -172,11 +172,11 @@ export function parseCatalog(md: string, where = 'products'): Catalog {
       field = undefined
       locale = undefined
       text = undefined
-      if (!block) throw new StoreshipError(`${at(i)}: "### ${h3[1]}" appears before any "## app / group / subscription" heading`)
+      if (!block) throw new CheckFailed(`${at(i)}: "### ${h3[1]}" appears before any "## app / group / subscription" heading`)
       const h = h3[1]!
       if (LOCALE_RE.test(h)) locale = h
       else if ((SUB_TEXT as readonly string[]).includes(h) && block.kind === 'subscription') text = h as (typeof SUB_TEXT)[number]
-      else throw new StoreshipError(`${at(i)}: unknown section "${h}"`, `expected a locale code or, under a subscription, one of: ${SUB_TEXT.join(', ')}`)
+      else throw new CheckFailed(`${at(i)}: unknown section "${h}"`, `expected a locale code or, under a subscription, one of: ${SUB_TEXT.join(', ')}`)
       continue
     }
     if (h2 && !line.startsWith('###')) {
@@ -190,12 +190,12 @@ export function parseCatalog(md: string, where = 'products'): Catalog {
         cat.app ??= {}
         block = { kind: 'app', app: cat.app }
       } else if (kind === 'group') {
-        if (!rest) throw new StoreshipError(`${at(i)}: "## group" needs a reference name, e.g. "## group Pro"`)
+        if (!rest) throw new CheckFailed(`${at(i)}: "## group" needs a reference name, e.g. "## group Pro"`)
         const group: GroupBlock = { reference: rest, localizations: {} }
         cat.groups.push(group)
         block = { kind: 'group', group }
       } else if (kind === 'subscription') {
-        if (!rest) throw new StoreshipError(`${at(i)}: "## subscription" needs a product id, e.g. "## subscription com.example.pro.monthly"`)
+        if (!rest) throw new CheckFailed(`${at(i)}: "## subscription" needs a product id, e.g. "## subscription com.example.pro.monthly"`)
         const sub: SubscriptionBlock = { productId: rest, localizations: {} }
         cat.subscriptions.push(sub)
         block = { kind: 'subscription', sub }
@@ -206,36 +206,36 @@ export function parseCatalog(md: string, where = 'products'): Catalog {
       const key = kv[1]!
       const value = kv[2]!.trim()
       if (block.kind === 'app') {
-        if (!(APP_SCALARS as readonly string[]).includes(key)) throw new StoreshipError(`${at(i)}: unknown app key "${key}"`, `keys are: ${APP_SCALARS.join(', ')}`)
+        if (!(APP_SCALARS as readonly string[]).includes(key)) throw new CheckFailed(`${at(i)}: unknown app key "${key}"`, `keys are: ${APP_SCALARS.join(', ')}`)
         if (key === 'price') block.app.price = parsePrice(value, at(i))
         if (key === 'territories') block.app.territories = parseTerritories(value)
       } else if (block.kind === 'subscription') {
         const s = block.sub
-        if (!(SUB_SCALARS as readonly string[]).includes(key)) throw new StoreshipError(`${at(i)}: unknown subscription key "${key}"`, `keys are: ${SUB_SCALARS.join(', ')}`)
+        if (!(SUB_SCALARS as readonly string[]).includes(key)) throw new CheckFailed(`${at(i)}: unknown subscription key "${key}"`, `keys are: ${SUB_SCALARS.join(', ')}`)
         if (key === 'group') s.group = value
         else if (key === 'reference') s.reference = value
         else if (key === 'period') {
-          if (!(PERIODS as readonly string[]).includes(value)) throw new StoreshipError(`${at(i)}: period must be one of ${PERIODS.join(', ')}`)
+          if (!(PERIODS as readonly string[]).includes(value)) throw new CheckFailed(`${at(i)}: period must be one of ${PERIODS.join(', ')}`)
           s.period = value as Period
         } else if (key === 'level') {
-          if (!/^\d+$/.test(value)) throw new StoreshipError(`${at(i)}: level must be an integer (1 = highest)`)
+          if (!/^\d+$/.test(value)) throw new CheckFailed(`${at(i)}: level must be an integer (1 = highest)`)
           s.level = Number(value)
         } else if (key === 'familySharable') {
-          if (!/^(true|false|yes|no)$/i.test(value)) throw new StoreshipError(`${at(i)}: familySharable must be true or false`)
+          if (!/^(true|false|yes|no)$/i.test(value)) throw new CheckFailed(`${at(i)}: familySharable must be true or false`)
           s.familySharable = /^(true|yes)$/i.test(value)
         } else if (key === 'price') s.price = parsePrice(value, at(i))
         else if (key === 'priceStart') {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new StoreshipError(`${at(i)}: priceStart must be YYYY-MM-DD`)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new CheckFailed(`${at(i)}: priceStart must be YYYY-MM-DD`)
           s.priceStart = value
         } else if (key === 'prices') s.prices = value.split(',').map((p) => parsePrice(p, at(i)))
         else if (key === 'territories') s.territories = parseTerritories(value)
-      } else throw new StoreshipError(`${at(i)}: groups take no "- key: value" lines (only "### <locale>" / "#### name")`)
+      } else throw new CheckFailed(`${at(i)}: groups take no "- key: value" lines (only "### <locale>" / "#### name")`)
       continue
     }
     if (block && (text || (locale && field))) buf.push(line)
   }
   flush()
-  if (!cat.app && !cat.groups.length && !cat.subscriptions.length) throw new StoreshipError(`${where}: nothing found`, 'expected "## app", "## group <name>" or "## subscription <productId>" sections')
+  if (!cat.app && !cat.groups.length && !cat.subscriptions.length) throw new CheckFailed(`${where}: nothing found`, 'expected "## app", "## group <name>" or "## subscription <productId>" sections')
   return cat
 }
 
@@ -244,7 +244,7 @@ export function readCatalog(file: string): Catalog {
   try {
     md = readFileSync(file, 'utf8')
   } catch {
-    throw new StoreshipError(`products file not found: ${file}`, 'set catalog.file in storeship.config.json (default products.md)')
+    throw new ConfigError(`products file not found: ${file}`, 'set catalog.file in storeship.config.json (default products.md)')
   }
   const cat = parseCatalog(md, file)
   // screenshot paths are relative to the file
@@ -560,14 +560,14 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
     const cur = current.subscriptions.find((x) => x.productId === s.productId)
     const tag = `subscription ${s.productId}`
     if (!cur) {
-      for (const k of ['group', 'reference', 'period', 'level'] as const) if (s[k] === undefined) throw new StoreshipError(`${tag}: "${k}" is required to create it`)
+      for (const k of ['group', 'reference', 'period', 'level'] as const) if (s[k] === undefined) throw new CheckFailed(`${tag}: "${k}" is required to create it`)
       plan.actions.push({
         target: tag,
         what: 'create',
         detail: `${s.period}, level ${s.level}, in group ${s.group}`,
         apply: async (c) => {
           const gid = groupIds.get(s.group!)
-          if (!gid) throw new StoreshipError(`${tag}: group "${s.group}" does not exist in App Store Connect`, 'add a "## group" section for it')
+          if (!gid) throw new CheckFailed(`${tag}: group "${s.group}" does not exist in App Store Connect`, 'add a "## group" section for it')
           const r = ok(
             await c.post('/v1/subscriptions', {
               data: {
@@ -599,7 +599,7 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
       if (l.name !== undefined && l.name !== curLoc?.name) attrs.name = l.name
       if (l.description !== undefined && l.description !== (curLoc?.description ?? '')) attrs.description = l.description
       if (!curLoc) {
-        if (l.name === undefined) throw new StoreshipError(`${ltag}: "#### name" is required to create the localization`)
+        if (l.name === undefined) throw new CheckFailed(`${ltag}: "#### name" is required to create the localization`)
         plan.actions.push({
           target: ltag,
           what: 'create localization',
@@ -699,7 +699,7 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
           what: cp ? `change ${cp.territory} ${cp.amount} → ${a.price.territory} ${a.price.amount}` : `set ${a.price.territory} ${a.price.amount}`,
           apply: async (c, appId) => {
             const p = pickPricePoint(await appPricePoints(c, appId, a.price!.territory), a.price!.amount)
-            if (!p) throw new StoreshipError(`app price: no price point at or below ${a.price!.territory} ${a.price!.amount}`)
+            if (!p) throw new CheckFailed(`app price: no price point at or below ${a.price!.territory} ${a.price!.amount}`)
             ok(
               await c.post('/v1/appPriceSchedules', {
                 data: {
@@ -741,18 +741,18 @@ export function planCatalog(wanted: Catalog, current: AscCatalog, opts: { readFi
 
 async function priceApply(c: AscClient, s: SubscriptionBlock, subIds: Map<string, string | undefined>, tag: string): Promise<void> {
   const sid = subIds.get(s.productId)
-  if (!sid) throw new StoreshipError(`${tag}: not created yet`)
+  if (!sid) throw new CheckFailed(`${tag}: not created yet`)
   const tiers = await subscriptionPricePoints(c, sid, s.price!.territory)
-  if (!tiers.length) throw new StoreshipError(`${tag}: App Store Connect has no price points for territory "${s.price!.territory}"`, 'territory codes are ISO 3166 alpha-3 (USA, CHN, JPN, GBR, DEU…), not currencies')
+  if (!tiers.length) throw new CheckFailed(`${tag}: App Store Connect has no price points for territory "${s.price!.territory}"`, 'territory codes are ISO 3166 alpha-3 (USA, CHN, JPN, GBR, DEU…), not currencies')
   const base = pickPricePoint(tiers, s.price!.amount)
-  if (!base) throw new StoreshipError(`${tag}: no price point at or below ${s.price!.territory} ${s.price!.amount} (lowest is ${tiers.map((t) => Number(t.amount)).sort((a, b) => a - b)[0]})`, `run \`storeship products pricepoints ${s.productId} ${s.price!.territory}\` to see the tiers`)
+  if (!base) throw new CheckFailed(`${tag}: no price point at or below ${s.price!.territory} ${s.price!.amount} (lowest is ${tiers.map((t) => Number(t.amount)).sort((a, b) => a - b)[0]})`, `run \`storeship products pricepoints ${s.productId} ${s.price!.territory}\` to see the tiers`)
   // Keyed by territory: the equalization list can repeat one, and an override has to
   // replace the equalized row rather than be POSTed next to it.
   const byTerritory = new Map<string, PricePoint>()
   for (const p of [base, ...(await equalizations(c, base.id))]) if (p.territory) byTerritory.set(p.territory, p)
   for (const o of s.prices ?? []) {
     const p = pickPricePoint(await subscriptionPricePoints(c, sid, o.territory), o.amount)
-    if (!p) throw new StoreshipError(`${tag}: no price point at or below ${o.territory} ${o.amount}`)
+    if (!p) throw new CheckFailed(`${tag}: no price point at or below ${o.territory} ${o.amount}`)
     byTerritory.set(o.territory, p)
   }
   const only = s.territories && s.territories !== 'all' ? new Set(s.territories) : undefined

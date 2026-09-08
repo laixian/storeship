@@ -1,4 +1,15 @@
-/** Library surface: the same functions the CLI calls, for scripts and agents that prefer code. */
+/**
+ * Library surface: the same functions the CLI calls, for scripts and agents
+ * that prefer code. The agent contract itself — exit codes, error codes, the
+ * envelope, the command spec — is exported too, so a wrapper can speak it
+ * without shelling out.
+ */
+export { CODES, EXIT, EXIT_MEANING, codeMeta, type ErrorCode, type ExitName, type Retry } from './codes.ts'
+export { NAME, PROTOCOL, VERSION } from './meta.ts'
+export { fullSpec, commandSpec, type Spec, type CommandSpec, type FlagSpec } from './spec.ts'
+export { type Command, type Ctx, type Impact, type Need } from './ctx.ts'
+export { Out, project, table, mb, type Change, type NextStep } from './out.ts'
+export { checkSkill, mentionedCommands, stampOf, syncSkill, protocolBlock, errorsBlock, type SkillProblem } from './skills/sync.ts'
 export { createClient, signJwt, explain, ok, AscError, type AscClient, type AscResult } from './asc/client.ts'
 export * from './asc/versions.ts'
 export * from './asc/listing.ts'
@@ -9,8 +20,8 @@ export * from './asc/offers.ts'
 export * from './asc/analytics.ts'
 export * from './ios/xcode.ts'
 export { loadConfig, resolveConfig, findConfigFile, defaultKeyPath, type Config, type RawConfig } from './config.ts'
-export { StoreshipError, UsageError, ConfigError } from './errors.ts'
-export { HINTS, hintFor } from './hints.ts'
+export { StoreshipError, UsageError, ConfigError, NeedsHuman, CheckFailed, asStoreshipError, type ErrorInit } from './errors.ts'
+export { HINTS, hintFor, hintTextFor, type Hint } from './hints.ts'
 export * from './shots/types.ts'
 export { DEVICES, PREVIEW_TYPE, mergeDevices } from './shots/devices.ts'
 export { checkShots, stemOf } from './shots/check.ts'
@@ -29,3 +40,4 @@ export { defaultReelTemplate } from './reel/defaultTemplate.ts'
 export { makeReel, framePts, steadyRuns, swiftTool } from './reel/run.ts'
 export { loadReel } from './reel/load.ts'
 export { renderCommandDocs } from './docs/render.ts'
+export { pickVersion, stageOf, type Stage } from './commands/state.ts'

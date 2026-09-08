@@ -31,11 +31,11 @@ export function parseSegment(spec: string): Segment {
   const parts = spec.split(':')
   const portrait = parts.at(-1) === 'p'
   if (portrait) parts.pop()
-  if (parts.length < 3) throw new StoreshipError(`segment "${spec}" must be <file>:<start>:<duration>[:p]`)
+  if (parts.length < 3) throw new StoreshipError(`segment "${spec}" must be <file>:<start>:<duration>[:p]`, undefined, { code: 'USAGE' })
   const duration = Number(parts.pop())
   const start = Number(parts.pop())
   const file = parts.join(':')
-  if (!Number.isFinite(start) || !Number.isFinite(duration) || duration <= 0) throw new StoreshipError(`segment "${spec}": start and duration must be numbers`)
+  if (!Number.isFinite(start) || !Number.isFinite(duration) || duration <= 0) throw new StoreshipError(`segment "${spec}": start and duration must be numbers`, undefined, { code: 'USAGE' })
   return { file, start, duration, portrait }
 }
 

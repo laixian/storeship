@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import { createPreviewSet, mediaStatus, setItems, deleteMedia, uploadMedia } from '../asc/media.ts'
+import { EXIT } from '../codes.ts'
 import { type Command, type Ctx } from '../ctx.ts'
 import { StoreshipError, UsageError } from '../errors.ts'
 import { mb } from '../out.ts'
@@ -23,19 +24,22 @@ async function deviceOf(ctx: Ctx): Promise<{ id: string; previewType: string; si
   const d = devices[id]
   if (!d) throw new UsageError(`unknown device "${id}"`, `known: ${Object.keys(devices).join(', ')}`)
   const previewType = PREVIEW_TYPE[d.displayType]
-  if (!previewType) throw new StoreshipError(`${id} (${d.displayType}) has no App Preview type`)
+  if (!previewType) throw new StoreshipError(`${id} (${d.displayType}) has no App Preview type`, undefined, { code: 'USAGE' })
   return { id, previewType, simName: d.sim?.name }
 }
 
 export const previewCommand: Command = {
   name: 'preview',
   summary: 'App Preview video: record the simulator, cut VFR footage into a spec-size film, check, upload',
+  impact: 'read',
   sub: [
     {
       name: 'record',
       summary: 'start recording the booted simulator (stop with `preview stop`; never kill the process)',
       usage: 'preview record <out.mov> [--device id | --udid U]',
       flags: { device: 'device id; its simulator name selects the booted simulator', udid: 'target a simulator by UDID instead' },
+      impact: 'write',
+      needs: ['simulator'],
       run: async (ctx) => {
         const out = ctx.args.at(0, 'out.mov')
         const d = await deviceOf(ctx)
@@ -48,6 +52,8 @@ export const previewCommand: Command = {
     {
       name: 'stop',
       summary: 'stop the recording cleanly (SIGINT), so the session is not leaked in CoreSimulator',
+      impact: 'write',
+      needs: ['simulator'],
       run: async (ctx) => {
         const r = stopRecording()
         ctx.out.emit(r)
@@ -67,6 +73,9 @@ export const previewCommand: Command = {
         xfade: 'crossfade seconds between segments; default 0.5',
       },
       booleans: ['portrait'],
+      impact: 'write',
+      needs: ['ffmpeg'],
+      humanDecisions: ['which seconds of which take go into the film'],
       run: async (ctx) => {
         const out = ctx.args.at(0, 'out.mp4')
         const segments = ctx.args.positional.slice(1).map(parseSegment)
@@ -93,8 +102,9 @@ export const previewCommand: Command = {
         const p = probe(ff, out, true)
         const problems = checkPreview(p, d?.previewType)
         ctx.out.emit({ ...r, probe: p, problems })
+        ctx.out.changed({ kind: 'preview', target: out, what: 'cut', detail: `${p.width}×${p.height} ${p.duration.toFixed(2)}s` })
+        ctx.out.warn(...problems)
         ctx.out.log(`${out}: ${p.width}×${p.height} ${p.duration.toFixed(2)}s ${p.fps}fps${p.frames ? ` ${p.frames} frames` : ''}${p.audio ? ' + audio' : ''}`)
-        for (const b of problems) ctx.out.log(`  ⚠️ ${b}`)
       },
     },
     {
@@ -102,6 +112,8 @@ export const previewCommand: Command = {
       summary: 'size / duration / fps / frame count against the App Preview spec',
       usage: 'preview check <file> [--device id]',
       flags: { device: 'check against this device\'s preview type; without it any App Preview size passes' },
+      impact: 'read',
+      needs: ['ffmpeg'],
       run: async (ctx) => {
         const file = ctx.args.at(0, 'file')
         const d = await deviceOf(ctx)
@@ -110,16 +122,18 @@ export const previewCommand: Command = {
         ctx.out.emit({ file, probe: p, previewType: d?.previewType ?? null, problems })
         ctx.out.log(`${file}: ${p.width}×${p.height} ${p.duration.toFixed(2)}s ${p.fps}fps ${p.frames ?? '?'} frames${p.audio ? ' + audio' : ''}`)
         for (const b of problems) ctx.out.log(`  ✗ ${b}`)
-        if (problems.length) process.exitCode = 1
+        if (problems.length) process.exitCode = EXIT.no
         else ctx.out.log(`  ✓ ok${d ? ` for ${d.previewType}` : ''}`)
       },
     },
     {
       name: 'upload',
       summary: 'upload a preview into the right slot for a locale × device (creates the slot if missing)',
-      usage: 'preview upload <version> <file.mp4> --device id --locale L [--replace]',
-      flags: { device: 'device id → preview type / slot', locale: 'ASC locale code', replace: 'delete the previews already in the slot first' },
-      booleans: ['replace'],
+      usage: 'preview upload <version> <file.mp4> --device id --locale L [--replace] [--dry-run]',
+      flags: { device: 'device id → preview type / slot', locale: 'ASC locale code', replace: 'delete the previews already in the slot first', 'dry-run': 'check the file and the slot, upload nothing' },
+      booleans: ['replace', 'dry-run'],
+      impact: 'write',
+      needs: ['credentials', 'ffmpeg'],
       run: async (ctx) => {
         const version = ctx.args.at(0, 'version')
         const file = ctx.args.at(1, 'file.mp4')
@@ -127,13 +141,19 @@ export const previewCommand: Command = {
         if (!d) throw new UsageError('--device <id> is required')
         const locale = ctx.args.need('locale')
         const problems = checkPreview(probe(findFfmpeg(ctx.cfg.ffmpeg), file, true), d.previewType)
-        if (problems.length) throw new StoreshipError(`${file} does not meet the ${d.previewType} spec:\n  ${problems.join('\n  ')}`, 'ASC would reject it; fix with `storeship preview cut`')
+        if (problems.length) throw new StoreshipError(`${file} does not meet the ${d.previewType} spec:\n  ${problems.join('\n  ')}`, 'ASC would reject it; fix with `storeship preview cut`', { code: 'CHECK_FAILED' })
         const status = await mediaStatus(ctx.client(), ctx.appId(), version)
         const loc = status.find((l) => l.locale === locale)
-        if (!loc) throw new StoreshipError(`${locale} is not a localization of ${version}`)
-        let set = loc.sets.find((s) => s.kind === 'previews' && s.displayType === d.previewType)
+        if (!loc) throw new StoreshipError(`${locale} is not a localization of ${version}`, 'add the language in App Store Connect → App Information first', { code: 'NOT_FOUND' })
+        const set = loc.sets.find((s) => s.kind === 'previews' && s.displayType === d.previewType)
         let created = false
         let setId = set?.id
+        if (ctx.dryRun()) {
+          ctx.out.emit({ locale, previewType: d.previewType, setId: setId ?? null, file })
+          ctx.out.changed({ kind: 'preview', target: `${locale}/${d.previewType}`, what: 'would upload', detail: basename(file) }, ...(setId ? [] : [{ kind: 'preview set', target: d.previewType, what: 'would create' }]))
+          ctx.out.log(`would upload ${basename(file)} → ${locale} ${d.previewType}${setId ? ` (set ${setId})` : ' (slot does not exist yet)'}`)
+          return
+        }
         if (!setId) {
           setId = await createPreviewSet(ctx.client(), loc.localizationId, d.previewType)
           created = true
@@ -151,6 +171,7 @@ export const previewCommand: Command = {
         }
         const u = await uploadMedia(ctx.client(), 'preview', setId, file)
         ctx.out.emit({ setId, created, deleted, uploaded: u })
+        ctx.out.changed({ kind: 'preview', target: `${locale}/${d.previewType}`, what: 'uploaded', detail: basename(file) })
         ctx.out.log(`✅ ${basename(file)} → ${locale} ${d.previewType} (set ${setId}${created ? ', created' : ''}${deleted ? `, ${deleted} replaced` : ''}; ${u.chunks} chunks, ${mb(u.bytes)}). ASC processes it for a few minutes; pick the poster frame in the web UI.`)
       },
     },

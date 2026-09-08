@@ -1,7 +1,8 @@
 import { DEMO_PASSWORD_ENV, diffListing, diffReview, FIELDS, len, LIMITS, overLimit, overLimitReview, pushListing, pushReview, readListingFile, REVIEW_FIELDS, REVIEW_LIMITS, type Review } from '../asc/listing.ts'
 import { requireVersion } from '../asc/versions.ts'
+import { EXIT } from '../codes.ts'
 import { type Command, type Ctx } from '../ctx.ts'
-import { StoreshipError } from '../errors.ts'
+import { CheckFailed } from '../errors.ts'
 
 function check(ctx: Ctx): void {
   const { locales: wanted, review } = readListingFile(ctx.cfg.listing.file)
@@ -21,7 +22,11 @@ function check(ctx: Ctx): void {
   }
   ctx.out.emit({ locales: report, review: reviewReport })
   const bad = report.filter((r) => r.over.length)
-  if (bad.length || reviewReport?.over.length) throw new StoreshipError(`over limit: ${[...bad.map((r) => `${r.locale} ${r.over.join(', ')}`), ...(reviewReport?.over.length ? [`review ${reviewReport.over.join(', ')}`] : [])].join('; ')}`)
+  if (bad.length || reviewReport?.over.length)
+    throw new CheckFailed(
+      `over limit: ${[...bad.map((r) => `${r.locale} ${r.over.join(', ')}`), ...(reviewReport?.over.length ? [`review ${reviewReport.over.join(', ')}`] : [])].join('; ')}`,
+      'shorten the fields above in the listing file; App Store Connect counts a CJK character as one, and so does this',
+    )
 }
 
 async function diff(ctx: Ctx, write: boolean): Promise<void> {
@@ -45,9 +50,24 @@ async function diff(ctx: Ctx, write: boolean): Promise<void> {
   }
   const reviewChanged = rv?.diffs.filter((d) => !d.same) ?? []
   const total = changed.length + reviewChanged.length
-  if (!write) {
-    ctx.out.emit({ ...r, review: rv, wrote: [], wroteReview: [] })
+  // The texts themselves are up to 4000 characters per field per locale. The
+  // default payload says which fields differ and by how much; --raw has the text.
+  const slim = {
+    appInfo: r.appInfo,
+    diffs: r.diffs.map((d) => ({ locale: d.locale, field: d.field, same: d.same, target: d.target, wantedChars: len(d.wanted), currentChars: len(d.current) })),
+    skipped: r.skipped,
+    review: rv ? { detailId: rv.detailId, diffs: rv.diffs.map((d) => ({ field: d.field, same: d.same, wantedChars: len(d.wanted), currentChars: len(d.current) })) } : undefined,
+  }
+  if (!write || ctx.dryRun()) {
+    ctx.out.emit({ ...slim, wrote: [], wroteReview: [] }, { ...r, review: rv, wrote: [], wroteReview: [] })
+    ctx.out.changed(
+      ...changed.map((d) => ({ kind: 'listing', target: `${d.locale}/${d.field}`, what: 'would write', detail: `${len(d.current)} → ${len(d.wanted)} chars` })),
+      ...reviewChanged.map((d) => ({ kind: 'review', target: d.field, what: 'would write' })),
+    )
+    if (total) ctx.out.next({ command: `storeship listing push ${version}`, why: `${total} field(s) differ; show the human the diff first`, impact: 'write' })
     ctx.out.log(total ? `\n${total} field(s) differ. Nothing written; run \`storeship listing push ${version}\` to write them.` : '\nASC matches the listing file.')
+    // A non-empty diff is an answer, not a failure: exit 3 so a script can branch on it.
+    if (total) process.exitCode = EXIT.no
     return
   }
   const wrote = await pushListing(ctx.client(), changed)
@@ -58,17 +78,39 @@ async function diff(ctx: Ctx, write: boolean): Promise<void> {
     wroteReview = await pushReview(ctx.client(), v.id, rv)
     if (wroteReview.length) ctx.out.log(`  ✅ review ${wroteReview.join('/')} written`)
   }
-  ctx.out.emit({ ...r, review: rv, wrote, wroteReview })
+  ctx.out.emit({ ...slim, wrote, wroteReview }, { ...r, review: rv, wrote, wroteReview })
+  ctx.out.changed(
+    ...wrote.flatMap((w) => w.fields.map((f) => ({ kind: 'listing', target: `${w.locale}/${f}`, what: 'written' }))),
+    ...wroteReview.map((f) => ({ kind: 'review', target: f, what: 'written' })),
+  )
   if (!wrote.length && !wroteReview.length) ctx.out.log('\nnothing to write')
 }
 
 export const listingCommand: Command = {
   name: 'listing',
   summary: 'store metadata and App Review information from a Markdown file: check limits, diff against ASC, push',
+  impact: 'read',
   sub: [
-    { name: 'check', summary: 'parse the listing file and check character limits (offline)', run: async (ctx) => void check(ctx) },
-    { name: 'diff', summary: 'compare the listing file with what ASC has for a version', usage: 'listing diff <version>', run: (ctx) => diff(ctx, false) },
-    { name: 'push', summary: 'write differing fields to ASC (name/subtitle on appInfo, the rest and the review information on the version)', usage: 'listing push <version>', run: (ctx) => diff(ctx, true) },
+    { name: 'check', summary: 'parse the listing file and check character limits (offline)', impact: 'read', run: async (ctx) => void check(ctx) },
+    {
+      name: 'diff',
+      summary: 'compare the listing file with what ASC has for a version; exit 3 when anything differs',
+      usage: 'listing diff <version>',
+      impact: 'read',
+      needs: ['credentials'],
+      run: (ctx) => diff(ctx, false),
+    },
+    {
+      name: 'push',
+      summary: 'write differing fields to ASC (name/subtitle on appInfo, the rest and the review information on the version)',
+      usage: 'listing push <version> [--dry-run]',
+      flags: { 'dry-run': 'same as `listing diff`: show the change set, write nothing' },
+      booleans: ['dry-run'],
+      impact: 'write',
+      needs: ['credentials'],
+      humanDecisions: ['the store text itself, and whether it is ready to go live'],
+      run: (ctx) => diff(ctx, true),
+    },
   ],
   run: async (ctx) => void check(ctx),
 }

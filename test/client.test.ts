@@ -55,9 +55,9 @@ describe('client', () => {
 
 describe('hints', () => {
   it('maps the misleading messages to their real cause', () => {
-    assert.match(hintFor('error: exportArchive No signing certificate "iOS Distribution" found')!, /cloud signing/)
-    assert.match(hintFor('The specified pre-release build could not be added')!, /--wait/)
-    assert.match(hintFor('STATE_ERROR.ICP_NUMBER_MIIT_PROVIDER_NAME_MISMATCH')!, /ICP/)
+    assert.match(hintFor('error: exportArchive No signing certificate "iOS Distribution" found')!.hint, /cloud signing/)
+    assert.match(hintFor('The specified pre-release build could not be added')!.hint, /--wait/)
+    assert.match(hintFor('STATE_ERROR.ICP_NUMBER_MIIT_PROVIDER_NAME_MISMATCH')!.hint, /ICP/)
     assert.equal(hintFor('all fine'), undefined)
   })
 })

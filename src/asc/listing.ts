@@ -66,7 +66,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { type AscClient, ok } from './client.ts'
-import { StoreshipError } from '../errors.ts'
+import { CheckFailed, ConfigError, StoreshipError } from '../errors.ts'
 import { requireVersion } from './versions.ts'
 
 export const FIELDS = ['name', 'subtitle', 'keywords', 'description', 'promotionalText'] as const
@@ -157,15 +157,15 @@ export function parseSections(md: string, where = 'listing'): Parsed {
       const h3 = /^###\s+(\S+)/.exec(line)
       if (h3 && !line.startsWith('####')) {
         flush()
-        if (!section) throw new StoreshipError(`${where}:${i + 1}: "### ${h3[1]}" appears before any "## <locale>" or "## review" heading`)
+        if (!section) throw new CheckFailed(`${where}:${i + 1}: "### ${h3[1]}" appears before any "## <locale>" or "## review" heading`)
         const key = h3[1]!.toLowerCase()
         if (section.kind === 'locale') {
           const f = ALIASES[key]
-          if (!f) throw new StoreshipError(`${where}:${i + 1}: unknown field "${h3[1]}"`, `fields are: ${FIELDS.join(', ')}`)
+          if (!f) throw new CheckFailed(`${where}:${i + 1}: unknown field "${h3[1]}"`, `fields are: ${FIELDS.join(', ')}`)
           field = f
         } else {
           const f = REVIEW_ALIASES[key]
-          if (!f) throw new StoreshipError(`${where}:${i + 1}: unknown review field "${h3[1]}"`, `review fields are: ${REVIEW_FIELDS.join(', ')} (the demo password comes from ${DEMO_PASSWORD_ENV})`)
+          if (!f) throw new CheckFailed(`${where}:${i + 1}: unknown review field "${h3[1]}"`, `review fields are: ${REVIEW_FIELDS.join(', ')} (the demo password comes from ${DEMO_PASSWORD_ENV})`)
           field = f
         }
         continue
@@ -186,9 +186,9 @@ export function parseSections(md: string, where = 'listing'): Parsed {
     if (section && field) buf.push(line)
   }
   flush()
-  if (!Object.keys(locales).length) throw new StoreshipError(`${where}: no "## <locale>" sections found`, 'see the format in the storeship README (Store listing)')
+  if (!Object.keys(locales).length) throw new CheckFailed(`${where}: no "## <locale>" sections found`, 'see the format in docs/listing.md')
   if (review?.demoAccountRequired !== undefined && !/^(true|false|yes|no)$/i.test(review.demoAccountRequired))
-    throw new StoreshipError(`${where}: demoAccountRequired must be true or false, got "${review.demoAccountRequired}"`)
+    throw new CheckFailed(`${where}: demoAccountRequired must be true or false, got "${review.demoAccountRequired}"`)
   return { locales, review }
 }
 
@@ -202,7 +202,7 @@ export function readListingFile(file: string): Parsed {
   try {
     md = readFileSync(file, 'utf8')
   } catch {
-    throw new StoreshipError(`listing file not found: ${file}`, 'set listing.file in storeship.config.json')
+    throw new ConfigError(`listing file not found: ${file}`, 'set listing.file in storeship.config.json')
   }
   return parseSections(md, file)
 }
@@ -237,14 +237,14 @@ export async function editableAppInfo(c: AscClient, appId: string): Promise<{ id
   const infos = (await c.all(`/v1/apps/${appId}/appInfos?limit=10`)).map((i: any) => ({ id: i.id, state: i.attributes.state as string }))
   const editable = infos.filter((i) => i.state !== 'READY_FOR_DISTRIBUTION')
   const pick = editable[0] ?? infos[0]
-  if (!pick) throw new StoreshipError('the app has no appInfo records')
+  if (!pick) throw new StoreshipError('the app has no appInfo records', undefined, { code: 'NOT_FOUND' })
   return { ...pick, all: infos }
 }
 
 export async function diffListing(c: AscClient, appId: string, version: string, wanted: Record<string, Listing>): Promise<{ appInfo: { id: string; state: string; ambiguous: boolean }; diffs: FieldDiff[]; skipped: string[] }> {
   for (const [loc, l] of Object.entries(wanted)) {
     const over = overLimit(l)
-    if (over.length) throw new StoreshipError(`${loc} exceeds App Store limits: ${over.join(', ')}`, 'shorten the listing file; nothing was written')
+    if (over.length) throw new CheckFailed(`${loc} exceeds App Store limits: ${over.join(', ')}`, 'shorten the listing file; nothing was written')
   }
   const v = await requireVersion(c, appId, version)
   const info = await editableAppInfo(c, appId)
@@ -277,7 +277,7 @@ export async function pushListing(c: AscClient, diffs: FieldDiff[]): Promise<{ l
     const attributes = Object.fromEntries(group.map((d) => [d.field, d.wanted]))
     const r = await c.patch(`/v1/${type}/${targetId}`, { data: { type, id: targetId, attributes } })
     if (r.status === 409 && target === 'appInfo')
-      throw new StoreshipError(`409 writing ${locale} name/subtitle`, 'this is usually the locked (live) appInfo; the account has two and the editable one exists only while a new version is being prepared')
+      throw new StoreshipError(`409 writing ${locale} name/subtitle`, 'this is usually the locked (live) appInfo; the account has two and the editable one exists only while a new version is being prepared', { code: 'API' })
     ok(r, `write ${locale} ${Object.keys(attributes).join('/')}`)
     out.push({ locale, target, fields: group.map((d) => d.field) })
   }
@@ -306,7 +306,7 @@ export function diffReviewFields(wanted: Review, current: Record<string, unknown
 
 export async function diffReview(c: AscClient, versionId: string, wanted: Review, env: Record<string, string | undefined> = process.env): Promise<ReviewState> {
   const over = overLimitReview(wanted)
-  if (over.length) throw new StoreshipError(`review exceeds App Store limits: ${over.join(', ')}`, 'shorten the notes; nothing was written')
+  if (over.length) throw new CheckFailed(`review exceeds App Store limits: ${over.join(', ')}`, 'shorten the notes; nothing was written')
   const r = ok(await c.get(`/v1/appStoreVersions/${versionId}/appStoreReviewDetail`), 'read review detail')
   const d = r.json?.data
   return { detailId: d?.id, diffs: diffReviewFields(wanted, d?.attributes, env[DEMO_PASSWORD_ENV]) }

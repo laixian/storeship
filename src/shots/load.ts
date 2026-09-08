@@ -32,25 +32,25 @@ async function importModule(file: string): Promise<any> {
 export async function loadShots(cfg: Config): Promise<ShotsSetup> {
   const s = cfg.shots
   const contentFile = s.content
-  if (!contentFile || !existsSync(contentFile)) throw new StoreshipError(`shots content file not found: ${contentFile ?? '(unset)'}`, 'set shots.content in storeship.config.json (a .ts/.js/.json exporting { shots, devices?, template? } or a Shot[])')
+  if (!contentFile || !existsSync(contentFile)) throw new StoreshipError(`shots content file not found: ${contentFile ?? '(unset)'}`, 'set shots.content in storeship.config.json (a .ts/.js/.json exporting { shots, devices?, template? } or a Shot[])', { code: 'CONFIG' })
   const mod = await importModule(contentFile)
   const raw = mod.default ?? mod.shots ?? mod.SHOTS ?? mod
   const content: ShotsContent = Array.isArray(raw) ? { shots: raw } : { shots: raw.shots ?? mod.shots ?? mod.SHOTS, devices: raw.devices ?? mod.devices, template: raw.template ?? mod.template }
-  if (!Array.isArray(content.shots)) throw new StoreshipError(`${contentFile} does not export a shots array`)
+  if (!Array.isArray(content.shots)) throw new StoreshipError(`${contentFile} does not export a shots array`, undefined, { code: 'CHECK_FAILED' })
 
   let template: Template = content.template ?? defaultTemplate
   if (s.template) {
-    if (!existsSync(s.template)) throw new StoreshipError(`shots template not found: ${s.template}`)
+    if (!existsSync(s.template)) throw new StoreshipError(`shots template not found: ${s.template}`, undefined, { code: 'CONFIG' })
     const t = await importModule(s.template)
     template = t.default ?? t.template ?? (typeof t.render === 'function' ? t : undefined)
-    if (!template || typeof template.render !== 'function') throw new StoreshipError(`${s.template} must export a template with render(ctx)`)
+    if (!template || typeof template.render !== 'function') throw new StoreshipError(`${s.template} must export a template with render(ctx)`, undefined, { code: 'CHECK_FAILED' })
   }
 
   const devices = mergeDevices(content.devices)
   const deviceIds = s.devices ?? [...new Set(content.shots.flatMap((sh) => Object.keys(sh.cards ?? {})))].filter((id) => devices[id])
-  for (const id of deviceIds) if (!devices[id]) throw new StoreshipError(`unknown device "${id}"`, `known: ${Object.keys(devices).join(', ')}`)
+  for (const id of deviceIds) if (!devices[id]) throw new StoreshipError(`unknown device "${id}"`, `known: ${Object.keys(devices).join(', ')}`, { code: 'CONFIG' })
   const locales = s.locales ?? cfg.locales
-  if (!locales.length) throw new StoreshipError('no locales', 'set locales (or shots.locales) in storeship.config.json')
+  if (!locales.length) throw new StoreshipError('no locales', 'set locales (or shots.locales) in storeship.config.json', { code: 'CONFIG' })
   const tags = s.localeTags ?? {}
   const tag = (l: string): string => tags[l] ?? l
   const src = s.src ?? resolve(cfg.root, 'store/screenshots')

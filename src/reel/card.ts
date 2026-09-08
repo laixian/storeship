@@ -49,5 +49,5 @@ export function renderCard(chrome: string, html: string, canvas: { w: number; h:
   }
   const b = readFileSync(out)
   // IHDR colour type at byte 25: 6 = RGBA. Without alpha the hole is opaque and the video is hidden.
-  if (b[25] !== 6) throw new StoreshipError('the card PNG has no alpha channel, so the hole would be opaque', 'Chrome ignored --default-background-color; check the Chrome build, or set chrome in the config to a different binary')
+  if (b[25] !== 6) throw new StoreshipError('the card PNG has no alpha channel, so the hole would be opaque', 'Chrome ignored --default-background-color; check the Chrome build, or set chrome in the config to a different binary', { code: 'CHECK_FAILED' })
 }

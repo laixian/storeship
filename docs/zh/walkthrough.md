@@ -18,7 +18,7 @@ npx storeship doctor
 
 `init` 从 `expo config` 读 bundle id 和 team id，向 App Store Connect 查 app id 和已有语言，写出 `storeship.config.json`。`doctor` 把后面每一步要用的东西逐项检查，缺什么说怎么补。配置文件提交进仓库，里面只有标识符。
 
-要让 Claude Code 一起干的话，再 `npx storeship skill install`（把四个 skill 拷进 `.claude/skills/`），并加上 README「给 agent」里那一条权限规则。
+要让 Claude Code 一起干的话，`storeship init` 已经把五个 skill 拷进 `.claude/skills/`、并把权限规则写进了 `.claude/settings.local.json`（不想要就加 `--no-skills` / `--no-permissions`）。agent 实际对话的那套接口见[给 agent 用](agents.md)，它从 `storeship state` 开始。
 
 ## 2. 定版本号、生成原生工程
 
@@ -155,4 +155,4 @@ npx storeship release 1.0.0 --date 2026-10-01
 
 - `offer new --name … --codes 500` 建订阅优惠码并下载 CSV（App Store Connect 网页里没有这个入口）。
 - `reel make take.mov out.mp4` 把录屏摆进带文案的卡片，出竖版社交视频。
-- `skill install` 把 Claude Code skill 拷进 `.claude/skills/`，agent 就能跑上面所有步骤，判断留给你。
+- `storeship state` 会说发布走到哪了、下一步该跑什么——对人和对 agent 一样有用；升级之后用 `skill install` 刷新 Claude Code skill。判断始终是你的：[给 agent 用](agents.md) 列了工具拒绝替你做的那些。

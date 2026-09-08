@@ -14,7 +14,7 @@ export function swiftTool(name: string): string {
     try {
       execFileSync('swiftc', ['-O', '-o', out, src], { stdio: 'pipe' })
     } catch (e) {
-      throw new StoreshipError(`cannot compile ${name}.swift: ${(e as { stderr?: Buffer }).stderr?.toString().slice(-400)}`, 'Xcode (with its toolchain) is required for reel')
+      throw new StoreshipError(`cannot compile ${name}.swift: ${(e as { stderr?: Buffer }).stderr?.toString().slice(-400)}`, 'Xcode (with its toolchain) is required for reel', { code: 'MISSING_TOOL' })
     }
   }
   return out
@@ -41,7 +41,7 @@ export function makeReel(content: ReelContent, o: MakeOptions): string {
   } catch (e) {
     const err = e as { stderr?: string; stdout?: string }
     const msg = (err.stderr ?? '').trim() || (err.stdout ?? '').trim()
-    throw new StoreshipError(msg.replace(/^✗ /, ''), /band height must be/.test(msg) ? 'band.h in the reel content must match the cropped recording; the template reads the same band, so change it in one place' : undefined)
+    throw new StoreshipError(msg.replace(/^✗ /, ''), /band height must be/.test(msg) ? 'band.h in the reel content must match the cropped recording; the template reads the same band, so change it in one place' : undefined, { code: 'CHECK_FAILED' })
   }
 }
 

@@ -8,7 +8,7 @@ import type { Card, Device, Img, Shot, Template } from './types.ts'
 /** Width/height from the PNG IHDR (first 24 bytes) — no image library needed. */
 export function pngSize(file: string): { w: number; h: number } {
   const b = readFileSync(file)
-  if (b.length < 24 || b.readUInt32BE(0) !== 0x89504e47) throw new StoreshipError(`${file} is not a PNG`)
+  if (b.length < 24 || b.readUInt32BE(0) !== 0x89504e47) throw new StoreshipError(`${file} is not a PNG`, undefined, { code: 'CHECK_FAILED' })
   return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }
 }
 
@@ -31,7 +31,7 @@ const CHROME_CANDIDATES = [
 export function findChrome(configured?: string): string {
   const c = process.env.STORESHIP_CHROME ?? configured
   if (c) {
-    if (!existsSync(c)) throw new StoreshipError(`chrome not found at ${c}`)
+    if (!existsSync(c)) throw new StoreshipError(`chrome not found at ${c}`, undefined, { code: 'MISSING_TOOL' })
     return c
   }
   for (const p of CHROME_CANDIDATES) if (existsSync(p)) return p
@@ -39,7 +39,7 @@ export function findChrome(configured?: string): string {
     const p = which(b)
     if (p) return p
   }
-  throw new StoreshipError('no Chrome / Chromium found', 'install Google Chrome, or set chrome in storeship.config.json / STORESHIP_CHROME')
+  throw new StoreshipError('no Chrome / Chromium found', 'install Google Chrome, or set chrome in storeship.config.json / STORESHIP_CHROME', { code: 'MISSING_TOOL' })
 }
 
 /** Render an HTML document to a PNG of exactly w×h device pixels. */

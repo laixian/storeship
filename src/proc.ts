@@ -19,7 +19,11 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; quiet?: b
     }
     child.stdout.on('data', tap)
     child.stderr.on('data', tap)
-    child.on('error', (e) => reject(new StoreshipError(`cannot run ${cmd}: ${e.message}`, cmd === 'xcodebuild' || cmd === 'xcrun' ? 'is Xcode installed and selected? `xcode-select -p`' : undefined)))
+    child.on('error', (e) =>
+      reject(
+        new StoreshipError(`cannot run ${cmd}: ${e.message}`, cmd === 'xcodebuild' || cmd === 'xcrun' ? 'is Xcode installed and selected? `xcode-select -p`' : undefined, { code: 'MISSING_TOOL' }),
+      ),
+    )
     child.on('close', (code) => resolve({ code: code ?? -1, output }))
   })
 }
@@ -29,7 +33,10 @@ export async function must(cmd: string, args: string[], what: string, opts: { cw
   const r = await run(cmd, args, opts)
   if (r.code !== 0) {
     const tail = r.output.split('\n').filter((l) => /error|fail|❌/i.test(l)).slice(-8).join('\n') || r.output.slice(-800)
-    throw new StoreshipError(`${what} failed (exit ${r.code})\n${tail}`, hintFor(r.output))
+    // The hint table carries the code too, so an xcodebuild failure Apple words
+    // misleadingly still arrives as something an agent can branch on.
+    const h = hintFor(r.output)
+    throw new StoreshipError(`${what} failed (exit ${r.code})\n${tail}`, h?.hint, { code: h?.code, humanAction: h?.humanAction })
   }
   return r.output
 }

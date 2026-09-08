@@ -14,4 +14,11 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: node dist/cli.js --help
-      - run: node dist/cli.js docs --check docs/commands.md && node dist/cli.js docs --lang zh --check docs/zh/commands.md
+      # The generated reference, and the generated blocks inside the skills and
+      # the agent docs, are part of the interface: a drift here is a bug.
+      - run: node dist/cli.js docs --check docs/commands.md
+      - run: node dist/cli.js docs --lang zh --check docs/zh/commands.md
+      - run: node dist/cli.js skill sync --check
+      - run: node dist/cli.js skill check
+      # The published shape has to answer the agent contract, not just start.
+      - run: node dist/cli.js spec --json > /dev/null

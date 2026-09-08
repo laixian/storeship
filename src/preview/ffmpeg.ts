@@ -16,14 +16,14 @@ export const FFMPEG_HINT =
 export function findFfmpeg(configured?: string): string {
   const c = process.env.STORESHIP_FFMPEG ?? configured
   if (c) {
-    if (!existsSync(c)) throw new StoreshipError(`ffmpeg not found at ${c}`, FFMPEG_HINT)
+    if (!existsSync(c)) throw new StoreshipError(`ffmpeg not found at ${c}`, FFMPEG_HINT, { code: 'MISSING_TOOL' })
     return c
   }
   const p = which('ffmpeg')
   if (p) return p
   const conventional = join(homedir(), '.local', 'opt', 'ffmpeg', 'ffmpeg')
   if (existsSync(conventional)) return conventional
-  throw new StoreshipError('ffmpeg not found', FFMPEG_HINT)
+  throw new StoreshipError('ffmpeg not found', FFMPEG_HINT, { code: 'MISSING_TOOL' })
 }
 
 export type Probe = { duration: number; width: number; height: number; fps: number; frames?: number; audio: boolean }
@@ -39,12 +39,12 @@ export function parseProbe(stderr: string): Omit<Probe, 'frames'> {
   const d = /Duration: ([0-9:.]+)/.exec(stderr)
   const v = /Stream #\d+:\d+.*Video: .*?(\d{2,5})x(\d{2,5})/.exec(stderr)
   const f = /(\d+(?:\.\d+)?) fps/.exec(stderr)
-  if (!d || !v) throw new StoreshipError(`could not read the video: ${stderr.split('\n').filter((l) => /error|Invalid|No such/i.test(l)).join(' ') || 'no video stream'}`)
+  if (!d || !v) throw new StoreshipError(`could not read the video: ${stderr.split('\n').filter((l) => /error|Invalid|No such/i.test(l)).join(' ') || 'no video stream'}`, undefined, { code: 'CHECK_FAILED' })
   return { duration: parseDuration(d[1]!), width: Number(v[1]), height: Number(v[2]), fps: f ? Number(f[1]) : 0, audio: /Audio: /.test(stderr) }
 }
 
 export function probe(ff: string, file: string, countFrames = false): Probe {
-  if (!existsSync(file)) throw new StoreshipError(`no such file: ${file}`)
+  if (!existsSync(file)) throw new StoreshipError(`no such file: ${file}`, undefined, { code: 'NOT_FOUND' })
   const r = spawnSync(ff, ['-hide_banner', '-i', file], { encoding: 'utf8' })
   const p: Probe = parseProbe(r.stderr)
   if (countFrames) {

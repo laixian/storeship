@@ -79,11 +79,11 @@ export async function createOffer(c: AscClient, subscriptionId: string, o: Creat
   const count = o.codes ?? 500
   const expires = o.expires ?? new Date(Date.now() + 175 * 864e5).toISOString().slice(0, 10)
   const dup = (await c.all(`/v1/subscriptions/${subscriptionId}/offerCodes?limit=50`)).find((x: any) => x.attributes.name === o.name)
-  if (dup) throw new StoreshipError(`an offer named "${o.name}" already exists (${dup.id})`, 'offer names must be unique; pick another or deactivate the old one')
+  if (dup) throw new StoreshipError(`an offer named "${o.name}" already exists (${dup.id})`, 'offer names must be unique; pick another or deactivate the old one', { code: 'CHECK_FAILED' })
 
   const prices = await c.all(`/v1/subscriptions/${subscriptionId}/prices?include=territory&limit=200`)
   const territories = [...new Set(prices.map((p: any) => p.relationships.territory.data.id as string))]
-  if (!territories.length) throw new StoreshipError('the subscription has no prices, so no territories to offer in')
+  if (!territories.length) throw new StoreshipError('the subscription has no prices, so no territories to offer in', 'set a price first: `storeship products push`', { code: 'CHECK_FAILED' })
 
   const included = territories.map((t, i) => ({
     type: 'subscriptionOfferCodePrices',
@@ -131,7 +131,7 @@ export async function createOffer(c: AscClient, subscriptionId: string, o: Creat
 export async function downloadCodes(c: AscClient, batchId: string, out: string): Promise<{ file: string; rows: number }> {
   const res = await c.raw(`/v1/subscriptionOfferCodeOneTimeUseCodes/${batchId}/values`)
   const csv = await res.text()
-  if (res.status !== 200) throw new StoreshipError(`download codes: ${res.status} ${csv.slice(0, 300)}`)
+  if (res.status !== 200) throw new StoreshipError(`download codes: ${res.status} ${csv.slice(0, 300)}`, undefined, { code: 'API' })
   writeFileSync(out, csv)
   return { file: out, rows: csv.split(/\r?\n/).filter((l) => l.trim()).length }
 }

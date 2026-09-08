@@ -5,7 +5,37 @@ description: Produce App Store screenshots with storeship — drive the simulato
 
 # App Store screenshots with storeship
 
-The tool renders real screenshots onto a canvas from two project files: a **content** file (which screens, titles per locale, background, crop rectangles per device) and a **template** module (what the canvas looks like). Commands: `storeship shots check | render | upload | seed`, `storeship sim …`. Always use `--json`.
+<!-- storeship 0.3.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+
+The tool renders real screenshots onto a canvas from two project files: a **content** file (which screens, titles per locale, background, crop rectangles per device) and a **template** module (what the canvas looks like). Commands: `storeship shots check`, `storeship shots render`, `storeship shots upload`, `storeship shots seed`, and `storeship sim` to drive the simulator.
+
+## How you talk to this tool
+
+<!-- storeship:protocol -->
+Every command takes `--json` and answers with one envelope:
+
+```json
+{ "ok": true, "command": "version attach", "data": {}, "changed": [], "warnings": [], "next": [{ "command": "…", "why": "…", "impact": "write" }] }
+{ "ok": false, "error": { "code": "BUILD_NOT_PROCESSED", "message": "…", "hint": "…", "retry": "after-wait", "humanAction": null } }
+```
+
+`ok` says whether the command ran, never whether the answer was yes. The exit code says that:
+
+| exit | meaning | what to do |
+|---|---|---|
+| 0 | the command did what it says | continue |
+| 1 | the command failed | read error.code and error.retry; do not repeat a `never` |
+| 2 | the command line was wrong | fix the command, never retry it unchanged |
+| 3 | it ran, and the answer is negative: rejected, over limit, out of date, something differs | branch on the data; this is a result, not a failure |
+| 4 | no verdict yet: still processing, still in review, still building | wait and ask again; the answer will change on its own |
+| 5 | only a person can continue: a GUI action, a secret, or an irreversible step | stop and tell the human exactly what error.humanAction says |
+| 130 | a person answered no at a confirmation | stop |
+
+Branch on `error.code`, never on the message. `retry: "never"` means running it again changes nothing.
+Read `next` — it is what this tool would do next, and it never contains an irreversible command.
+<!-- /storeship:protocol -->
+
+`storeship state --json` says where the release is and what to run next; `storeship spec --json` is the whole command tree with each command's impact and prerequisites.
 
 ## The procedure
 
@@ -13,7 +43,7 @@ The tool renders real screenshots onto a canvas from two project files: a **cont
 2. **Seed demo data** with `storeship shots seed -- <args>` if the project has a seed script (`shots.seed`), then restart the app (`xcrun simctl terminate` / `launch`) — data is usually read at launch.
 3. **Status bar**: `storeship sim statusbar` (9:41, full battery).
 4. **Capture** each screen into `shots.src` as `<prefix>-<localeTag>-<n>-<slug>.png` (use `<n>b-<slug>` for a second screen of the same shot). Drive with `storeship sim find "<label>"` (accessibility, needs idb), `sim tap x y` (device points, portrait), `sim ltap x y` for landscape pages (pixels measured on the rotated screenshot), `sim shot out.png [270]` (270 for landscape). Measure coordinates on the device screenshot ÷ scale, never on a thumbnail.
-5. **Edit the content file**: titles, background, crops. Run `storeship shots check --json` until it is clean; it reports every problem at once.
+5. **Edit the content file**: titles, background, crops. Run `storeship shots check --json` until it is clean; it reports every problem at once, and exits 3 (`CHECK_FAILED`) while any remain — nothing is rendered from a failing check, on purpose.
 6. `storeship shots render --sheet --json`, then **open the contact sheet and look at the row**. This is the only real acceptance test; single frames all look fine on their own. Show it to the human.
 7. `storeship shots upload <version> --dry-run --json`, show the plan, then upload. Sets inherit from the previous version; only changed files need uploading. `--replace` wipes a set first.
 

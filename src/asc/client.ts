@@ -46,7 +46,10 @@ export class AscError extends StoreshipError {
   readonly result: AscResult
   constructor(result: AscResult, context: string) {
     const detail = explain(result)
-    super(`${context}: ${detail}`, hintFor(detail))
+    // The hint table is also the code table: a message Apple points the wrong way
+    // with is exactly the one an agent must not branch on by prose.
+    const h = hintFor(detail)
+    super(`${context}: ${detail}`, h?.hint, { code: h?.code ?? 'API', humanAction: h?.humanAction })
     this.name = 'AscError'
     this.result = result
   }
@@ -89,11 +92,14 @@ export function createClient(o: ClientOptions): AscClient {
   let pem = o.keyPem
   const keyPem = (): string => {
     if (pem) return pem
-    if (!o.keyPath) throw new StoreshipError('no App Store Connect private key configured', 'set asc.keyPath or ASC_KEY_PATH, or put the .p8 at ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8')
+    if (!o.keyPath) throw new StoreshipError('no App Store Connect private key configured', 'set asc.keyPath or ASC_KEY_PATH, or put the .p8 at ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8', { code: 'CONFIG' })
     try {
       pem = readFileSync(o.keyPath, 'utf8')
     } catch {
-      throw new StoreshipError(`cannot read the App Store Connect private key at ${o.keyPath}`, 'the .p8 can only be downloaded once from App Store Connect → Users and Access → Integrations; put it at that path with chmod 600')
+      throw new StoreshipError(`cannot read the App Store Connect private key at ${o.keyPath}`, 'the .p8 can only be downloaded once from App Store Connect → Users and Access → Integrations; put it at that path with chmod 600', {
+        code: 'KEY_MISSING',
+        humanAction: `put AuthKey_<KEY_ID>.p8 at ${o.keyPath} (chmod 600). If it was never downloaded, revoke the key in App Store Connect → Users and Access → Integrations and create a new one — Apple hands out the file exactly once.`,
+      })
     }
     return pem
   }

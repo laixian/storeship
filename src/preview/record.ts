@@ -22,7 +22,7 @@ export function startRecording(udid: string, out: string, codec = 'h264'): { pid
     const prev = JSON.parse(readFileSync(PID_FILE, 'utf8')) as { pid: number; out: string }
     try {
       process.kill(prev.pid, 0)
-      throw new StoreshipError(`a recording is already running (pid ${prev.pid} → ${prev.out})`, 'stop it with `storeship preview stop`')
+      throw new StoreshipError(`a recording is already running (pid ${prev.pid} → ${prev.out})`, 'stop it with `storeship preview stop`', { code: 'CHECK_FAILED' })
     } catch (e) {
       if (e instanceof StoreshipError) throw e
       unlinkSync(PID_FILE)
@@ -47,7 +47,7 @@ export function stopRecording(): { pid: number; out: string } {
   if (!existsSync(PID_FILE)) {
     // fall back to any recordVideo process
     const r = spawnSync('pkill', ['-INT', '-f', 'simctl io .* recordVideo'])
-    if (r.status !== 0) throw new StoreshipError('no recording is running')
+    if (r.status !== 0) throw new StoreshipError('no recording is running', undefined, { code: 'NOT_FOUND' })
     return { pid: 0, out: '(unknown, stopped by name)' }
   }
   const rec = JSON.parse(readFileSync(PID_FILE, 'utf8')) as { pid: number; out: string }

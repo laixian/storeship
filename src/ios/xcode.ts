@@ -34,7 +34,7 @@ export function resolveProject(cfg: Config): Project {
   if (!workspace) {
     const found = existsSync(iosDir) ? readdirSync(iosDir).filter((f) => f.endsWith('.xcworkspace')) : []
     if (!found.length)
-      throw new StoreshipError(`no .xcworkspace under ${iosDir}`, expo ? 'run `npx expo prebuild` first (the ios/ directory is generated), or set ios.workspace' : 'set ios.workspace in storeship.config.json')
+      throw new StoreshipError(`no .xcworkspace under ${iosDir}`, expo ? 'run `npx expo prebuild` first (the ios/ directory is generated), or set ios.workspace' : 'set ios.workspace in storeship.config.json', { code: 'PREFLIGHT' })
     workspace = join(iosDir, found[0]!)
   }
   const scheme = cfg.ios.scheme ?? basename(workspace, '.xcworkspace')
@@ -126,11 +126,11 @@ export type ExpoConfig = { name?: string; version?: string; ios?: { bundleIdenti
 export async function expoConfig(projectDir: string): Promise<ExpoConfig> {
   const r = await run('npx', ['expo', 'config', '--type', 'public', '--json'], { cwd: projectDir, quiet: true })
   const i = r.output.indexOf('{')
-  if (r.code !== 0 || i < 0) throw new StoreshipError(`expo config failed in ${projectDir}\n${r.output.slice(-600)}`)
+  if (r.code !== 0 || i < 0) throw new StoreshipError(`expo config failed in ${projectDir}\n${r.output.slice(-600)}`, undefined, { code: 'PREFLIGHT' })
   try {
     return JSON.parse(r.output.slice(i)) as ExpoConfig
   } catch {
-    throw new StoreshipError('could not parse `expo config --json` output', 'run it by hand in the project directory to see what it prints')
+    throw new StoreshipError('could not parse `expo config --json` output', 'run it by hand in the project directory to see what it prints', { code: 'PREFLIGHT' })
   }
 }
 
@@ -212,7 +212,7 @@ export async function exportArchive(p: Project, cfg: Config, archivePath: string
     { cwd: p.projectDir, quiet: opts.quiet },
   )
   const ipa = readdirSync(exportDir).find((f) => f.endsWith('.ipa'))
-  if (!ipa) throw new StoreshipError(`export produced no .ipa in ${exportDir}`)
+  if (!ipa) throw new StoreshipError(`export produced no .ipa in ${exportDir}`, 'the export step reported success but wrote nothing; check the xcodebuild output above', { code: 'UNKNOWN' })
   const full = join(exportDir, ipa)
   return { ipa: full, bytes: readFileSync(full).length, exportDir }
 }

@@ -1,17 +1,8 @@
-import { createInterface } from 'node:readline/promises'
 import { applyPlan, checkCatalog, deleteGroup, deleteSubscription, pickPricePoint, planCatalog, PRODUCT_LIMITS, readAscCatalog, readCatalog, subscriptionPricePoints } from '../asc/products.ts'
 import { len } from '../asc/listing.ts'
+import { EXIT } from '../codes.ts'
 import { type Command, type Ctx } from '../ctx.ts'
-import { StoreshipError } from '../errors.ts'
-
-async function confirm(ctx: Ctx, question: string): Promise<void> {
-  if (ctx.args.bool('yes')) return
-  if (!process.stdin.isTTY) throw new StoreshipError('not a terminal; pass --yes to run without confirmation')
-  const rl = createInterface({ input: process.stdin, output: process.stderr })
-  const a = (await rl.question(`${question} [y/N] `)).trim().toLowerCase()
-  rl.close()
-  if (a !== 'y' && a !== 'yes') throw new StoreshipError('aborted', undefined, 130)
-}
+import { CheckFailed, StoreshipError } from '../errors.ts'
 
 function check(ctx: Ctx): ReturnType<typeof readCatalog> {
   const cat = readCatalog(ctx.cfg.catalog.file)
@@ -28,7 +19,7 @@ function check(ctx: Ctx): ReturnType<typeof readCatalog> {
   ctx.out.emit({ app: cat.app, groups: cat.groups.length, subscriptions: cat.subscriptions.map((s) => s.productId), rows, problems })
   for (const r of rows) ctx.out.log(`  ${r.length > r.limit ? '✗' : '✓'} ${r.item.padEnd(48)} ${String(r.length).padStart(4)}/${r.limit}`)
   for (const p of problems) ctx.out.log(`  ✗ ${p}`)
-  if (problems.length) throw new StoreshipError(`${problems.length} problem(s) in ${ctx.cfg.catalog.file}`)
+  if (problems.length) throw new CheckFailed(`${problems.length} problem(s) in ${ctx.cfg.catalog.file}`, 'every line marked ✗ above; nothing was read from App Store Connect')
   ctx.out.log(`\n${cat.groups.length} group(s), ${cat.subscriptions.length} subscription(s)${cat.app ? ', app pricing' : ''} — ok`)
   return cat
 }
@@ -60,9 +51,13 @@ async function diff(ctx: Ctx, write: boolean): Promise<void> {
   for (const s of plan.same) ctx.out.log(`  = ${s}`)
   for (const a of plan.actions) ctx.out.log(`  → ${a.target}: ${a.what}${a.detail ? `  (${a.detail})` : ''}`)
   for (const w of plan.warnings) ctx.out.log(`  ⚠️ ${w}`)
-  if (!write) {
+  if (!write || ctx.dryRun()) {
     ctx.out.emit({ same: plan.same, actions: plan.actions.map((a) => ({ target: a.target, what: a.what, detail: a.detail })), warnings: plan.warnings, wrote: [] })
+    ctx.out.changed(...plan.actions.map((a) => ({ kind: 'product', target: a.target, what: a.what, detail: a.detail })))
+    ctx.out.warn(...plan.warnings)
+    if (plan.actions.length) ctx.out.next({ command: 'storeship products push', why: `${plan.actions.length} change(s) to make; show the human the list first — prices and availability are live store objects`, impact: 'write' })
     ctx.out.log(plan.actions.length ? `\n${plan.actions.length} change(s). Nothing written; run \`storeship products push\` to apply them.` : '\nASC matches the products file.')
+    if (plan.actions.length) process.exitCode = EXIT.no
     return
   }
   if (!plan.actions.length) {
@@ -70,29 +65,40 @@ async function diff(ctx: Ctx, write: boolean): Promise<void> {
     ctx.out.log('\nnothing to write')
     return
   }
-  await confirm(ctx, `apply ${plan.actions.length} change(s)?`)
+  await ctx.confirm(`apply ${plan.actions.length} change(s) to App Store Connect?`, 'these are live store objects: prices, availability and subscription metadata')
   const wrote: string[] = []
   await applyPlan(ctx.client(), ctx.appId(), plan, (a) => {
     ctx.out.note(`  ✅ ${a.target}: ${a.what}`)
     wrote.push(`${a.target}: ${a.what}`)
   })
   ctx.out.emit({ same: plan.same, actions: plan.actions.map((a) => ({ target: a.target, what: a.what, detail: a.detail })), warnings: plan.warnings, wrote })
+  ctx.out.changed(...plan.actions.map((a) => ({ kind: 'product', target: a.target, what: a.what, detail: a.detail })))
   ctx.out.log(`\n${wrote.length} change(s) written. A new subscription is submitted together with the next app version (\`storeship version submit\`).`)
 }
 
 export const productsCommand: Command = {
   name: 'products',
   summary: 'subscription groups, subscriptions, prices, availability and app price from products.md: check, diff against ASC, push',
+  impact: 'read',
   sub: [
-    { name: 'check', summary: 'parse the products file and check limits and references (offline)', run: async (ctx) => void check(ctx) },
-    { name: 'status', summary: 'what App Store Connect has: groups, subscriptions, state, base price, territories, review screenshot', run: status },
-    { name: 'diff', summary: 'compare the products file with App Store Connect and print every change it would make; writes nothing', run: (ctx) => diff(ctx, false) },
+    { name: 'check', summary: 'parse the products file and check limits and references (offline)', impact: 'read', run: async (ctx) => void check(ctx) },
+    { name: 'status', summary: 'what App Store Connect has: groups, subscriptions, state, base price, territories, review screenshot', impact: 'read', needs: ['credentials'], run: status },
+    {
+      name: 'diff',
+      summary: 'compare the products file with App Store Connect and print every change it would make; writes nothing, exit 3 when anything differs',
+      impact: 'read',
+      needs: ['credentials'],
+      run: (ctx) => diff(ctx, false),
+    },
     {
       name: 'push',
       summary: 'apply the diff: create groups / subscriptions / localizations, set prices (base territory equalized everywhere), availability, review screenshot',
-      usage: 'products push [--yes]',
-      flags: { yes: 'skip the confirmation (required when not in a terminal)' },
-      booleans: ['yes'],
+      usage: 'products push [--dry-run] [--yes]',
+      flags: { yes: 'skip the confirmation (required when not in a terminal)', 'dry-run': 'same as `products diff`: show the plan, write nothing' },
+      booleans: ['yes', 'dry-run'],
+      impact: 'write',
+      needs: ['credentials'],
+      humanDecisions: ['the prices, the territories, and whether a live price may change'],
       run: (ctx) => diff(ctx, true),
     },
     {
@@ -100,12 +106,14 @@ export const productsCommand: Command = {
       summary: "price tiers Apple offers for a subscription in a territory (they are discrete; look before writing a price)",
       usage: 'products pricepoints <productId> <TERRITORY> [--near AMOUNT]',
       flags: { near: 'show only tiers around this amount' },
+      impact: 'read',
+      needs: ['credentials'],
       run: async (ctx) => {
         const productId = ctx.args.at(0, 'productId')
         const territory = ctx.args.at(1, 'TERRITORY').toUpperCase()
         const cur = await readAscCatalog(ctx.client(), ctx.appId())
         const sub = cur.subscriptions.find((s) => s.productId === productId)
-        if (!sub) throw new StoreshipError(`no subscription ${productId} in App Store Connect`, 'create it first: add it to products.md and `storeship products push`')
+        if (!sub) throw new StoreshipError(`no subscription ${productId} in App Store Connect`, 'create it first: add it to products.md and `storeship products push`', { code: 'NOT_FOUND' })
         // Sort before windowing: ASC does not promise an order, and "the tiers around
         // this amount" is meaningless on an arbitrary one.
         let points = (await subscriptionPricePoints(ctx.client(), sub.id, territory)).sort((a, b) => Number(a.amount) - Number(b.amount))
@@ -127,12 +135,14 @@ export const productsCommand: Command = {
       usage: 'products delete <productId> --yes [--with-group]',
       flags: { yes: 'required: deleting is permanent', 'with-group': 'also delete the subscription group if this was its last subscription' },
       booleans: ['yes', 'with-group'],
+      impact: 'irreversible',
+      needs: ['credentials'],
+      confirm: 'this deletes the subscription from App Store Connect for good (App Store Connect only allows it while the subscription was never submitted)',
       run: async (ctx) => {
         const productId = ctx.args.at(0, 'productId')
-        if (!ctx.args.bool('yes')) throw new StoreshipError('refusing without --yes', `this deletes ${productId} from App Store Connect for good (only possible while it was never submitted)`)
         const cur = await readAscCatalog(ctx.client(), ctx.appId())
         const sub = cur.subscriptions.find((s) => s.productId === productId)
-        if (!sub) throw new StoreshipError(`no subscription ${productId} in App Store Connect`)
+        if (!sub) throw new StoreshipError(`no subscription ${productId} in App Store Connect`, undefined, { code: 'NOT_FOUND' })
         await deleteSubscription(ctx.client(), sub.id)
         ctx.out.log(`deleted subscription ${productId} (${sub.id})`)
         const left = cur.subscriptions.filter((s) => s.groupId === sub.groupId && s.id !== sub.id)
@@ -146,6 +156,7 @@ export const productsCommand: Command = {
           ctx.out.log(`deleted its group ${groupName} (${sub.groupId}), now empty`)
         } else if (!left.length) ctx.out.log(`its group ${groupName} (${sub.groupId}) is now empty; pass --with-group to delete that too`)
         ctx.out.emit({ deleted: productId, subscriptionId: sub.id, groupDeleted })
+        ctx.out.changed({ kind: 'subscription', target: productId, what: 'deleted' }, ...(groupDeleted ? [{ kind: 'group', target: sub.groupId, what: 'deleted' }] : []))
       },
     },
   ],

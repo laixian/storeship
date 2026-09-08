@@ -5,7 +5,37 @@ description: Make a vertical social video (Xiaohongshu / Reels / Shorts) from a 
 
 # Reel with storeship
 
-`storeship reel card | pts | make`. The card (title, points, brand, colours) comes from the project's `reel.content` file; the tool renders it with a transparent hole, rotates and crops the recording into the hole, and exports an mp4. Use `--json`.
+<!-- storeship 0.3.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+
+`storeship reel card`, `storeship reel pts`, `storeship reel make`. The card (title, points, brand, colours) comes from the project's `reel.content` file; the tool renders it with a transparent hole, rotates and crops the recording into the hole, and exports an mp4.
+
+## How you talk to this tool
+
+<!-- storeship:protocol -->
+Every command takes `--json` and answers with one envelope:
+
+```json
+{ "ok": true, "command": "version attach", "data": {}, "changed": [], "warnings": [], "next": [{ "command": "…", "why": "…", "impact": "write" }] }
+{ "ok": false, "error": { "code": "BUILD_NOT_PROCESSED", "message": "…", "hint": "…", "retry": "after-wait", "humanAction": null } }
+```
+
+`ok` says whether the command ran, never whether the answer was yes. The exit code says that:
+
+| exit | meaning | what to do |
+|---|---|---|
+| 0 | the command did what it says | continue |
+| 1 | the command failed | read error.code and error.retry; do not repeat a `never` |
+| 2 | the command line was wrong | fix the command, never retry it unchanged |
+| 3 | it ran, and the answer is negative: rejected, over limit, out of date, something differs | branch on the data; this is a result, not a failure |
+| 4 | no verdict yet: still processing, still in review, still building | wait and ask again; the answer will change on its own |
+| 5 | only a person can continue: a GUI action, a secret, or an irreversible step | stop and tell the human exactly what error.humanAction says |
+| 130 | a person answered no at a confirmation | stop |
+
+Branch on `error.code`, never on the message. `retry: "never"` means running it again changes nothing.
+Read `next` — it is what this tool would do next, and it never contains an irreversible command.
+<!-- /storeship:protocol -->
+
+`storeship state --json` says where the release is and what to run next; `storeship spec --json` is the whole command tree with each command's impact and prerequisites.
 
 ## Procedure
 

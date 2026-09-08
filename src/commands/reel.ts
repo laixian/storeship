@@ -11,16 +11,20 @@ import { findChrome } from '../shots/render.ts'
 export const reelCommand: Command = {
   name: 'reel',
   summary: 'vertical social video: a simulator recording inside a designed card, audio aligned by frame timestamps',
+  impact: 'read',
   sub: [
     {
       name: 'card',
       summary: 'render the card layer (transparent hole for the video) to a PNG',
       usage: 'reel card <out.png>',
+      impact: 'write',
+      needs: ['chrome'],
       run: async (ctx) => {
         const out = ctx.args.at(0, 'out.png')
         const { content, template } = await loadReel(ctx.cfg)
         renderCard(findChrome(ctx.cfg.chrome), cardHtml(content, template), content.canvas, out)
         ctx.out.emit({ out, canvas: content.canvas, band: content.band })
+        ctx.out.changed({ kind: 'card', target: out, what: 'rendered', detail: `${content.canvas.w}×${content.canvas.h}` })
         ctx.out.log(`card → ${out} (${content.canvas.w}×${content.canvas.h}, hole ${content.band.w}×${content.band.h} @ ${content.band.x},${content.band.y})`)
       },
     },
@@ -35,6 +39,9 @@ export const reelCommand: Command = {
         'audio-t0': "where the audio's t=0 falls on the recording's timeline (seconds); from `reel pts`",
         card: 'use this card PNG instead of rendering one',
       },
+      impact: 'write',
+      needs: ['chrome', 'xcode', 'ffmpeg'],
+      humanDecisions: ['which seconds of the take to keep, and where the music lands'],
       run: async (ctx) => {
         const recording = ctx.args.at(0, 'recording.mov')
         const out = ctx.args.at(1, 'out.mp4')
@@ -56,6 +63,7 @@ export const reelCommand: Command = {
             audioT0: ctx.args.str('audio-t0') ? ctx.args.num('audio-t0', 0) : undefined,
           })
           ctx.out.emit({ out, log: log.trim() })
+          ctx.out.changed({ kind: 'reel', target: out, what: 'rendered' })
           ctx.out.log(log.trim())
         } finally {
           rmSync(tmp, { recursive: true, force: true })
@@ -68,6 +76,8 @@ export const reelCommand: Command = {
       usage: 'reel pts <recording.mov> [--all]',
       flags: { all: 'print every frame, not only the steady runs' },
       booleans: ['all'],
+      impact: 'read',
+      needs: ['xcode'],
       run: async (ctx) => {
         const file = ctx.args.at(0, 'recording.mov')
         const pts = framePts(file)

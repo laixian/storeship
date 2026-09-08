@@ -56,8 +56,8 @@ export function bootedUdid(name?: string): string {
   const list = JSON.parse(simctl(['list', 'devices', 'booted', '-j'])) as { devices: Record<string, { name: string; udid: string; state: string }[]> }
   const booted = Object.values(list.devices).flat().filter((d) => d.state === 'Booted')
   const pick = name ? booted.find((d) => d.name === name) : booted[0]
-  if (!pick) throw new StoreshipError(name ? `no booted simulator named "${name}"` : 'no booted simulator', `booted: ${booted.map((d) => d.name).join(', ') || 'none'}. Boot one in Simulator.app or \`xcrun simctl boot "<name>"\``)
-  if (!name && booted.length > 1) throw new StoreshipError(`${booted.length} simulators are booted; say which with --profile or --udid`, booted.map((d) => `${d.name} ${d.udid}`).join('\n'))
+  if (!pick) throw new StoreshipError(name ? `no booted simulator named "${name}"` : 'no booted simulator', `booted: ${booted.map((d) => d.name).join(', ') || 'none'}. Boot one in Simulator.app or \`xcrun simctl boot "<name>"\``, { code: 'MISSING_TOOL' })
+  if (!name && booted.length > 1) throw new StoreshipError(`${booted.length} simulators are booted; say which with --profile or --udid`, booted.map((d) => `${d.name} ${d.udid}`).join('\n'), { code: 'USAGE' })
   return pick.udid
 }
 
@@ -152,13 +152,13 @@ export class Sim {
   }
 
   text(s: string): void {
-    if (!this.idb) throw new StoreshipError('typing needs idb')
+    if (!this.idb) throw new StoreshipError('typing needs idb', 'see docs/media.md → Simulator driver for the install', { code: 'MISSING_TOOL' })
     execFileSync(this.idb.bin, ['ui', 'text', '--udid', this.udid, s], { env: this.idb.env, stdio: 'ignore' })
   }
 
   // ---- accessibility -------------------------------------------------------
   tree(): any[] {
-    if (!this.idb) throw new StoreshipError('the accessibility tree needs idb')
+    if (!this.idb) throw new StoreshipError('the accessibility tree needs idb', 'see docs/media.md → Simulator driver for the install', { code: 'MISSING_TOOL' })
     const out = execFileSync(this.idb.bin, ['ui', 'describe-all', '--udid', this.udid], { env: this.idb.env, encoding: 'utf8', maxBuffer: 64 << 20 })
     return (JSON.parse(out) as any[]).filter((e) => e.frame)
   }
@@ -177,7 +177,7 @@ export class Sim {
 
   tapLabel(label: string, nth = 0): { label: string; app: [number, number]; dev: [number, number] } {
     const e = this.find(label, nth)
-    if (!e) throw new StoreshipError(`no element matching "${label}"`, 'list them with `storeship sim ls [pattern]`')
+    if (!e) throw new StoreshipError(`no element matching "${label}"`, 'list them with `storeship sim ls [pattern]`', { code: 'NOT_FOUND' })
     const x = e.frame.x + e.frame.width / 2
     const y = e.frame.y + e.frame.height / 2
     const dev = this.toDevice(x, y)

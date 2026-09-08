@@ -18,7 +18,7 @@ npx storeship doctor
 
 `init` reads `expo config` for the bundle id and team id, asks App Store Connect for the app id and the localizations, and writes `storeship.config.json`. `doctor` checks everything the later steps need and says how to fix each miss. Commit the config file; it holds identifiers, not secrets.
 
-If Claude Code will be doing this with you, also `npx storeship skill install` (copies the four skills into `.claude/skills/`) and add the permission rule from README → *For agents*.
+If Claude Code will be doing this with you, `storeship init` has already copied the five skills into `.claude/skills/` and added the permission rule to `.claude/settings.local.json` (it skips both with `--no-skills` / `--no-permissions`). What the agent actually talks to is described in [for agents](agents.md); `storeship state` is where it starts.
 
 ## 2. Set the version and generate the native project
 
@@ -156,4 +156,4 @@ If an agent runs this for you, give it a permission rule once (see README → Fo
 
 - `offer new --name … --codes 500` creates subscription offer codes and downloads the CSV (there is no UI for this in App Store Connect).
 - `reel make take.mov out.mp4` composes a vertical social video with your copy on a card.
-- `skill install` copies Claude Code skills into `.claude/skills/`, so an agent can run all of the above with the judgement calls left to you.
+- `storeship state` says where the release is and what to run next — for you as much as for an agent; `skill install` refreshes the Claude Code skills after an upgrade. The judgement calls stay yours: [for agents](agents.md) lists which ones the tool refuses to make.

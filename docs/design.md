@@ -61,6 +61,39 @@ skills/*            给 agent 的操作规程（Claude Code SKILL.md 格式）�
 | 19 | **Android / Google Play 明确不在范围** | 仓库里没有任何积累；README 写明只做 iOS 比做一半好 |
 | 20 | **审核信息（备注 / 联系人 / 演示账号）是 `listing.md` 的 `## review` 一节**，走同一套 diff / push；演示密码只从 `ASC_DEMO_PASSWORD` 来 | 2026-09-08 X 上一位用户的反馈：「到等待审核从来不是难点，难的是之后 Apple 要的那些」。ASC API 有 `appStoreReviewDetails`（每版一条，新版本自动带上一版的），正好和文案即代码同一个形状。od-mobile 迁移时当场抓到文档和 ASC 已分叉（「智能扒谱」vs「分轨练习」）。密码 API 写了不回读，没法 diff，所以「设了就每次写」比「猜要不要写」诚实；对账时去掉备注尾部换行——ASC 网页编辑器会留一个 |
 
+## 3.5 agent 契约（0.3）：从「有 --json」到「接口本身是给 agent 的」
+
+Ken 2026-09-08 定的方向：**这个工具包完全是 for agent 的**。0.2 之前的形态是「人用的 CLI + 三样补丁」——
+`--json`、`hints.ts`、`skills/`。补丁的问题是：agent 拿到的仍然是「每条命令各自一个形状的 JSON」
+和「一段英文散文」，它只能靠正则 Apple 的措辞来分支，而那恰恰是 `hints.ts` 存在的理由。
+
+0.3 立了一条规则，其余都是它的推论：
+
+> **agent 在运行时需要的一切，必须能从一条它能跑的命令里拿到，而不是从一篇它必须提前读过的文档里拿。**
+
+| # | 决定 | 理由 |
+|---|------|------|
+| 21 | **统一信封** `{ ok, storeship, protocol, command, data, changed[], warnings[], next[], error? }`（`src/out.ts`） | 以前成功走 `emit(任意形状)`、失败走 `{error, hint}`，两种形状、没有 `ok`。现在成功和失败键集相同，读的人不必为失败写第二个分支。`protocol` 在信封形状破坏读者时才 +1 |
+| 22 | **`ok` ≠ 「答案是是」**：命令跑成了就是 `ok: true`，答案由**退出码**说 | 审核被拒、diff 非空、check 不过——这些是结果不是故障。以前它们混在 exit 1 里，agent 只能当崩溃处理 |
+| 23 | **退出码表**：0 成功 / 2 用法 / **3 否** / **4 未决** / **5 得人来** / 130 中止（`src/codes.ts`） | `version watch` 的 0/3/4 早就是好范式，把它抬成全局约定。**5 是新拆出来的**：Xcode 没登账号、`.p8` 没下过、不可撤销的命令没给 `--yes`——重试一万次都没用，只有人能动 |
+| 24 | **稳定错误码**：`hints.ts` 每条从 `{test, hint}` 变成 `{code, test, hint, humanAction?}`，码表在 `codes.ts`，退出码和 `retry` 由码决定 | 「认码不认英文」。附带好处：`AscError` 和 `proc.must()` 都从同一张表取码，所以 xcodebuild 的 `No Accounts` 现在直接是 `XCODE_NO_ACCOUNT` + 退出码 5，而不是笼统的失败 |
+| 25 | **`storeship state`**（`src/commands/state.ts`）：一次调用给出 `stage` / `local` / `version` / `clean` / `blockers` / `next` | agent 会崩、会被换上下文、会隔一天被唤醒。以前它要跑六条命令再自己拼状态机。这条是**循环条件**，其余命令是步骤。它会跑 `expo config`（几秒），因为「忘了 prebuild」只有这样才抓得到 |
+| 26 | **`storeship spec`**：命令树 + 每条的 `impact` / `needs` / `humanDecisions` + 退出码表 + 错误码表，全部机器可读 | 「never run `version cancel` on your own initiative」以前是 skill 里的一句祈使句——散文会被截断、会被覆盖，**数据不会**。`--help --json` 走同一份 |
+| 27 | **`impact: read \| write \| irreversible` 是 `Command` 上的字段，不可撤销由 CLI 统一拦截** | 不是每条命令自己判 `--yes`（`version cancel` 和 `products delete` 原来各写了一遍，`offer off` 和 `media delete` 压根没写）。放在 `cli.ts` 里，新命令漏不掉；`state.next` 也永远不生成这类命令 |
+| 28 | **所有会写的命令都有 `--dry-run`**，且 `changed[]` 和真跑同形状 | `release` 原来把计划用散文打到 stderr，agent 拿不到。「先给人看计划，再真跑」不该需要第二个解析器 |
+| 29 | **`--raw` / `--fields`**：默认返回精简投影 | agent 的上下文是钱。`listing diff` 原来把每种语言四千字的描述连 current 带 wanted 一起塞进去；现在默认只给字段名和字数 |
+| 30 | **确认模型显式化**：`ctx.confirm()` 一处实现，`STORESHIP_NON_INTERACTIVE=1` 让「没人能回答」变成 `NEEDS_HUMAN` + 退出码 5 | 原来两份重复实现，非 TTY 报的是笼统的「not a terminal」 |
+| 31 | **skill 不再只是拷贝的散文**：`<!-- storeship:protocol -->` / `<!-- storeship:errors -->` 是生成块，文件带版本戳，`skill check` 校验「提到的每条命令都存在」，CI 跑 `skill sync --check` | skill 里混着大量**事实**（命令名、flag、错误处置），而事实一改就分叉。分工回到 §5.4 定的那条：**代码做确定性的事并且校验，skill 只做流程和判断**。`doctor` 会报项目里那份副本过期 |
+| 32 | **`init` 顺手装 skill 和权限规则**（`--no-skills` / `--no-permissions` 可关） | 「agent-first 的工具，却要人先读 README 才能让 agent 用」是自相矛盾。权限规则原来是 README 里一段让人手抄的 JSON |
+| 33 | **文档分层**：README 给人（357 → 137 行，深水区搬进 `docs/listing.md`、`docs/products.md`、`docs/media.md`）；`docs/agents.md` 给「要接 agent 的工程师」；`AGENTS.md` 给「来改 storeship 自己的 agent」；**运行时 agent 不读 markdown** | 三个受众三份文档，混在一起谁都读不好。`docs/agents.md` 和它的中文版也带生成块，和 skill 一起被 `skill check` 管着 |
+| 34 | **不做 MCP server** | 二十多条命令 = 二十多份 tool schema 常驻上下文，换不来 CLI + `--json` 给不了的能力，还丢掉零依赖。真要做只暴露 `spec` / `state` / `run` 三个 |
+
+**顺手删掉的**：`hints.ts` 里那条 systemd `Start request repeated too quickly` —— 是从别的项目粘过来的，
+和 App Store 发布毫无关系，留在一张 agent 要照着分支的表里是纯噪音。
+
+**这一版没验的**：所有改动都只有单测和只读命令实跑。信封、退出码、`state` 的 stage 机在一次
+**真发版**里的表现还没验过——按 §6 的教训，「时间」那一维（构建几分钟才出现、账号会过期）只有真跑才知道。
+
 ## 4. 从 od-mobile 抽出来时改掉的硬编码
 
 盘点见当天的会话，落到代码里的：app id 原来在五个文件各写一份、只有一处认环境变量 →
