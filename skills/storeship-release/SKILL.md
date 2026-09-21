@@ -5,7 +5,7 @@ description: Release an iOS app to the App Store with the storeship CLI — buil
 
 # Releasing with storeship
 
-<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.1 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 You drive `storeship` (run as `npx storeship …`, or `pnpm storeship …` in a pnpm repo).
 

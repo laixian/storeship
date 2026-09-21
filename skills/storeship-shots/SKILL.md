@@ -5,7 +5,7 @@ description: Produce App Store screenshots with storeship — drive the simulato
 
 # App Store screenshots with storeship
 
-<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.1 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 The tool renders real screenshots, each inside a drawn device, from one project file: the **content** (which screens in what order, titles per locale, a style). Where every phone goes is decided by fixed layout rules, not by the content; what it looks like is the **style** (`plain`, `stage`, `color`, or a project module built with `extendStyle`). Commands: `storeship shots check`, `storeship shots render`, `storeship shots styles`, `storeship shots upload`, `storeship shots seed`, and `storeship sim` to drive the simulator.
 

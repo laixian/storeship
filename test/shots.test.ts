@@ -142,6 +142,14 @@ describe('shots paint', () => {
     assert.ok(html[0]!.includes('data:home'), 'the brand half shows the logo crop')
   })
 
+  it('a feathered logo fades only a thin band at each edge, so a wide tagline keeps its ends', () => {
+    const c = ctx()
+    const html = paintSlot(stage, c, layout(c.slots, dev, c.metrics, isLand, true), 0, c.img)
+    assert.match(html, /mask-image:linear-gradient\(90deg,transparent,#000 12%,#000 88%,transparent\),linear-gradient\(180deg/)
+    assert.match(html, /mask-composite:intersect/)
+    assert.doesNotMatch(html, /radial-gradient\(farthest-side/)
+  })
+
   it('every built-in style paints every slot', () => {
     for (const st of Object.values(STYLES)) {
       const c = ctx(st)

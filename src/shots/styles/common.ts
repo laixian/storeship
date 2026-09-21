@@ -40,6 +40,10 @@ export function brandBox(s: SlotCtx, top: number, side: number, maxBottom: numbe
   return { x: side, y: top, w: s.W - 2 * side, h: Math.max(Math.round(200 * u), bottom - top) }
 }
 
+/** How far in from each edge a feathered logo fades, in percent of its width / height. */
+export const FEATHER_X = 12
+export const FEATHER_Y = 14
+
 /** The logo crop, fitted into a box (slot coordinates). `feather` fades its edges into the background; otherwise it is a plate. */
 export function logo(s: SlotCtx, box: { x: number; y: number; w: number; h: number }, feather: boolean): string {
   const l = s.brand?.logo
@@ -52,8 +56,13 @@ export function logo(s: SlotCtx, box: { x: number; y: number; w: number; h: numb
   const w = Math.round(cw * k), h = Math.round(ch * k)
   const x = box.x + Math.round((box.w - w) / 2), y = box.y + Math.round((box.h - h) / 2)
   const u = s.device.unit
+  // Feather only a thin band along each edge — enough to lose the crop's rectangle. An oval
+  // fade (0.4.0) ate the ends of a wide logo's tagline: a crop is wider than it is tall, and
+  // whatever sits near its left and right edges fell outside the ellipse.
+  const fade = (dir: string, at: number) => `linear-gradient(${dir},transparent,#000 ${at}%,#000 ${100 - at}%,transparent)`
+  const edges = `${fade('90deg', FEATHER_X)},${fade('180deg', FEATHER_Y)}`
   const look = feather
-    ? 'mask-image:radial-gradient(farthest-side,#000 62%,transparent 98%);-webkit-mask-image:radial-gradient(farthest-side,#000 62%,transparent 98%)'
+    ? `mask-image:${edges};mask-composite:intersect;-webkit-mask-image:${edges};-webkit-mask-composite:source-in`
     : `border-radius:${Math.round(56 * u)}px;box-shadow:0 ${Math.round(40 * u)}px ${Math.round(80 * u)}px rgba(0,0,0,.3)`
   return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:url(${img.uri}) ${-Math.round(cx * k)}px ${-Math.round(cy * k)}px/${Math.round(img.w * k)}px ${Math.round(img.h * k)}px no-repeat;${look}"></div>`
 }

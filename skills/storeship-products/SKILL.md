@@ -5,7 +5,7 @@ description: Set up or change App Store subscriptions, pricing and offer codes w
 
 # Subscriptions and pricing with storeship
 
-<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.1 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 Everything is one file, `products.md` (path `catalog.file`), diffed against App Store Connect before anything is written.
 
