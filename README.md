@@ -11,6 +11,44 @@ That runs: preflight (did you forget `expo prebuild`?) → `xcodebuild archive` 
 **Docs**: [from zero to review](docs/walkthrough.md) · [for agents](docs/agents.md) · [command reference](docs/commands.md) · [configuration](docs/config.md) · [store listing](docs/listing.md) · [subscriptions & pricing](docs/products.md) · [screenshots & video](docs/media.md) · [library use](docs/api.md)
 **中文**: [README](docs/zh/README.md) · [从零到提审](docs/zh/walkthrough.md) · [给 agent 用](docs/zh/agents.md) · [命令参考](docs/zh/commands.md) · [配置参考](docs/zh/config.md)
 
+## Store screenshots, composed from real screens
+
+![Two App Store screenshots joined at the seam: one tilted iPhone runs across both, the OverDrive logo on the left half and the title “One playhead / the whole band” on the right; a third screenshot with its own title follows](docs/img/shots-hero.jpg)
+
+Real simulator screenshots, each inside a drawn iPhone or iPad, laid out by fixed rules and painted in a style. The first two frames above are **one phone across the seam**: iPhone search results show the first three screenshots side by side, and that row is what it is for. The rail, the hairlines and the chord strip along the bottom run through the whole set.
+
+The content file says which screens and what the titles say, and nothing about where things go:
+
+```ts
+export default {
+  style: 'stage',
+  brand: { logo: { src: '7-home', crop: { iphone69: [150, 260, 1020, 420] } } },   // cropped from a real screen
+  frames: [
+    { slug: 'rehearsal', sn: 'PROG', hero: {}, screen: '1-rehearsal',             // one phone across slots 1–2
+      title: { 'en-US': ['One playhead', 'the whole band'] } },
+    { slug: 'practice', sn: 'TRSC', screen: '2-practice',
+      title: { 'en-US': ['Import a song', 'get the chords'] } },
+    // …
+  ],
+} satisfies ShotsContent
+```
+
+`storeship shots render --sheet` renders every device × locale at the exact size App Store Connect accepts, and `storeship shots upload 1.4.0` puts them in the right slots. The layout rules are not settings: one phone size for the whole set (a landscape screen runs off the edge instead of shrinking), only the hero tilts, one phone per frame. Same content, three built-in styles:
+
+**`stage`**: one dark ground through the whole set (shown with OverDrive's own chord strip added on top)
+
+![The same eight screenshots in the stage style: dark background, framed phones, a progress rail under every title](docs/img/shots-stage.jpg)
+
+**`color`**: each frame's own brand colour
+
+![The same eight screenshots in the color style: a different flat colour per frame, dark titles, framed phones](docs/img/shots-color.jpg)
+
+**`plain`**: the original look, bare screens as rounded cards
+
+![The same eight screenshots in the plain style: flat colours, bold titles, screens as rounded cards without a device frame](docs/img/shots-plain.jpg)
+
+Examples are from [OverDrive](https://overdrive.work), the app storeship was extracted from. How to write a content file or your own style: **[docs/media.md](docs/media.md#screenshots)**.
+
 ## Why another tool
 
 - **fastlane** does all of this and much more, in Ruby, with a Gemfile, and a `Fastfile` you have to learn.

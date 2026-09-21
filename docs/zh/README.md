@@ -10,6 +10,44 @@ npx storeship release 1.4.0 --date 2026-10-01
 
 **English**: [README.md](../../README.md) · **文档**：[从零到提审](walkthrough.md) · [给 agent 用](agents.md) · [命令参考](commands.md) · [配置参考](config.md) · [商店文案](listing.md) · [订阅与定价](products.md) · [截图与视频](media.md) · [库接口](../api.md)
 
+## 商店截图：用真实截屏合成
+
+![两张商店截图在接缝处拼起来：一台倾斜的 iPhone 横跨两张，左半张是 OverDrive 的 logo，右半张是标题「One playhead / the whole band」；后面跟着第三张](../img/shots-hero.jpg)
+
+真实的模拟器截屏套进画出来的 iPhone / iPad，位置由固定的版式规则算，长相由风格决定。上面前两张是**一台手机横跨接缝**：iPhone 搜索结果里前三张截图是并排出现的，这一排就是给它看的。走针轨道、竖线和底部那排和弦小节格贯穿整套。
+
+内容文件只写印哪几屏、标题写什么，不写任何位置：
+
+```ts
+export default {
+  style: 'stage',
+  brand: { logo: { src: '7-home', crop: { iphone69: [150, 260, 1020, 420] } } },   // 从真实截屏里裁
+  frames: [
+    { slug: 'rehearsal', sn: 'PROG', hero: {}, screen: '1-rehearsal',             // 一台手机横跨第 1、2 张
+      title: { 'zh-Hans': ['自动走针', '全员同一小节'] } },
+    { slug: 'practice', sn: 'TRSC', screen: '2-practice',
+      title: { 'zh-Hans': ['导入一首歌', '自动扒出和弦'] } },
+    // …
+  ],
+} satisfies ShotsContent
+```
+
+`storeship shots render --sheet` 按 App Store Connect 接受的精确尺寸出每个设备档 × 每种语言，`storeship shots upload 1.4.0` 传进对应的槽位。版式规则不是选项：整套一种手机尺寸（横屏从边上出血截断，而不是缩小）、只有 hero 倾斜、一张一台。同一份内容，三个内置风格：
+
+**`stage`**：一片暗底贯穿整套（图里叠加了 OverDrive 自己的和弦小节格）
+
+![同样八张图的 stage 风格：暗底、带外框的手机、每个标题下一条走针轨道](../img/shots-stage.jpg)
+
+**`color`**：每张用自己的招牌色
+
+![同样八张图的 color 风格：每张一种纯色底、深色标题、带外框的手机](../img/shots-color.jpg)
+
+**`plain`**：原来的样子，裸截屏做圆角卡片
+
+![同样八张图的 plain 风格：纯色底、粗标题、没有外框的圆角截屏卡片](../img/shots-plain.jpg)
+
+示例来自 [OverDrive](https://overdrive.work)，storeship 就是从它身上抽出来的。怎么写内容文件、怎么写自己的风格：**[截图与视频](media.md#截图)**。
+
 ## 为什么又一个工具
 
 - **fastlane** 全都能做、还能做更多，代价是 Ruby、Gemfile 和一套要学的 `Fastfile`。
