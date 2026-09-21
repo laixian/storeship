@@ -25,7 +25,7 @@ import type { ShotsContent } from 'storeship'
 export default {
   style: 'stage',                                   // plain | stage | color | './my-style.ts'
   theme: { accent: '#2FE9DF' },                     // 风格的参数（storeship shots styles）
-  brand: { logo: { src: '7-home', crop: [230, 290, 860, 370] } },   // 从真实截屏里裁
+  brand: { logo: { src: '7-home', crop: { iphone69: [230, 290, 860, 370], ipad13: [720, 180, 620, 270] } } },   // 从真实截屏里裁
   frames: [
     { slug: 'rehearsal', sn: 'PROG', screen: '1-rehearsal', hero: {},   // 一台手机横跨第 1、2 张
       title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] } },

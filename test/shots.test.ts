@@ -114,7 +114,10 @@ describe('shots check', () => {
 
   it('brand logo crop must lie inside its source', () => {
     const bad = check({ brand: { logo: { src: 'home', crop: [1000, 0, 600, 300] } }, frames: [frame({ slug: 'h', hero: {} })] })
-    assert.match(bad.join('\n'), /crop \[1000, 0, 600, 300\] is outside/)
+    assert.match(bad.join('\n'), /iphone69 crop \[1000, 0, 600, 300\] is outside/)
+    const table = { logo: { src: 'home', crop: { ipad13: [0, 0, 10, 10] as [number, number, number, number] } } }
+    assert.match(check({ brand: table, frames: [frame({ slug: 'h', hero: {} })] }).join('\n'), /no crop for iphone69/)
+    assert.deepEqual(check({ brand: { logo: { src: 'home', crop: { iphone69: [0, 0, 600, 300] } } }, frames: [frame({ slug: 'h', hero: {} })] }), [])
   })
 })
 

@@ -11,6 +11,7 @@
  * coordinate or an angle. What is checked here is what content *can* say.
  */
 import { expand, layout, screensOf } from './layout.ts'
+import { cropFor } from './styles/common.ts'
 import type { Device, ShotsContent, Style } from './types.ts'
 
 export type CheckFs = { exists(file: string): boolean; pngSize(file: string): { w: number; h: number } }
@@ -112,8 +113,13 @@ export function checkShots(
   if (logo) {
     for (const locale of locales) {
       const nat = probe(logo.src, locale, 'brand.logo')
-      const [x, y, w, h] = logo.crop
-      if (nat && (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > nat.w || y + h > nat.h)) say(`brand.logo: crop [${logo.crop.join(', ')}] is outside ${logo.src} (${nat.w}×${nat.h})`)
+      const crop = cropFor(logo, device)
+      if (!crop) {
+        say(`brand.logo: no crop for ${device.id} (crop is a table by device id)`)
+        break
+      }
+      const [x, y, w, h] = crop
+      if (nat && (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > nat.w || y + h > nat.h)) say(`brand.logo: ${device.id} crop [${crop.join(', ')}] is outside ${logo.src} (${nat.w}×${nat.h})`)
     }
   }
   for (const locale of locales) {

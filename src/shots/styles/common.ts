@@ -1,5 +1,5 @@
 /** Pieces the built-in styles share. Exported so a project style can reuse them. */
-import type { Metrics, SlotCtx, StageCtx } from '../types.ts'
+import type { Brand, Crop, Device, Metrics, SlotCtx, StageCtx } from '../types.ts'
 
 export const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -21,6 +21,11 @@ export function rhythm(u: number, W: number, H: number, titleSize: number, lines
   return { titleTop, rule, baseline, phone: Math.round(W * 0.8485), heroY: Math.round(baseline + (H - baseline) * 0.45), gap: Math.round(90 * u) }
 }
 
+/** The logo crop for this device (a plain crop, or the entry for `device.id`). */
+export function cropFor(logo: NonNullable<Brand['logo']>, d: Device): Crop | undefined {
+  return Array.isArray(logo.crop) ? logo.crop : logo.crop[d.id]
+}
+
 /**
  * The box a brand half may use: from `top` down to just above the hero phone
  * (or `maxBottom`, whichever is higher). Tilt is allowed for.
@@ -39,8 +44,10 @@ export function brandBox(s: SlotCtx, top: number, side: number, maxBottom: numbe
 export function logo(s: SlotCtx, box: { x: number; y: number; w: number; h: number }, feather: boolean): string {
   const l = s.brand?.logo
   if (!l) return ''
+  const crop = cropFor(l, s.device)
+  if (!crop) return ''
   const img = s.img(l.src)
-  const [cx, cy, cw, ch] = l.crop
+  const [cx, cy, cw, ch] = crop
   const k = Math.min(box.w / cw, box.h / ch)
   const w = Math.round(cw * k), h = Math.round(ch * k)
   const x = box.x + Math.round((box.w - w) / 2), y = box.y + Math.round((box.h - h) / 2)

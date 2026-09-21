@@ -81,9 +81,12 @@ export type Frame = {
   hero?: { seamAt?: number; tilt?: number }
 }
 
+/** [x, y, w, h] in source pixels. */
+export type Crop = [number, number, number, number]
+
 export type Brand = {
-  /** The logo, cropped from a real screenshot: [x, y, w, h] in source pixels. */
-  logo?: { src: string; crop: [number, number, number, number] }
+  /** The logo, cropped from a real screenshot. Source pixels differ per device, so `crop` may be a table by device id. */
+  logo?: { src: string; crop: Crop | Record<string, Crop> }
   tagline?: Localized
 }
 
