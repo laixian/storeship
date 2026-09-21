@@ -55,6 +55,7 @@ export const CODES = {
   NOT_FOUND: { exit: EXIT.error, retry: 'never', about: 'the object does not exist in App Store Connect' },
   TIMEOUT: { exit: EXIT.pending, retry: 'after-wait', about: 'gave up waiting; the thing being waited for may still arrive' },
   MISSING_TOOL: { exit: EXIT.error, retry: 'never', about: 'something this command needs from outside is not there (Chrome, ffmpeg, idb, Xcode, a booted simulator)' },
+  RENDER_FAILED: { exit: EXIT.error, retry: 'now', about: 'headless Chrome did not produce a picture, twice; the message names which one and carries its stderr' },
   PENDING: { exit: EXIT.pending, retry: 'after-wait', about: 'it exists but is not ready yet; asking later gives a different answer' },
   API: { exit: EXIT.error, retry: 'never', about: "App Store Connect refused, and the reason is only in Apple's message" },
   AUTH: { exit: EXIT.error, retry: 'never', about: 'Apple rejected the API key' },

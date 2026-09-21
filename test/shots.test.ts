@@ -192,3 +192,69 @@ describe('style modules', () => {
     await assert.rejects(resolveStyle('nope', dir), /unknown style/)
   })
 })
+
+describe('shoot', () => {
+  /** A stand-in for Chrome: a node script whose behaviour is picked by FAKE_CHROME. */
+  const fake = async () => {
+    const { chmodSync, mkdtempSync, writeFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    const dir = mkdtempSync(join(tmpdir(), 'ss-shoot-'))
+    const bin = join(dir, 'chrome')
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const fs = require('fs')
+const out = process.argv.find((a) => a.startsWith('--screenshot=')).slice(13)
+const [w, h] = process.argv.find((a) => a.startsWith('--window-size=')).slice(14).split(',').map(Number)
+const png = (w, h) => { const b = Buffer.alloc(24); b.writeUInt32BE(0x89504e47, 0); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20); return b }
+const mode = process.env.FAKE_CHROME, state = ${JSON.stringify(join(dir, 'calls'))}
+const calls = (fs.existsSync(state) ? Number(fs.readFileSync(state, 'utf8')) : 0) + 1
+fs.writeFileSync(state, String(calls))
+if (mode === 'fail' || (mode === 'flaky' && calls === 1)) { console.error('[0922/001122.1:ERROR:gpu] noise'); console.error('boom: renderer crashed'); process.exit(3) }
+if (mode === 'nofile') process.exit(0)
+fs.writeFileSync(out, mode === 'wrongsize' ? png(10, 10) : png(w, h))
+`,
+    )
+    chmodSync(bin, 0o755)
+    return { bin, dir, out: join(dir, 'out.png'), tmp: join(dir, 'tmp') }
+  }
+  const run = async (mode: string) => {
+    const { shoot } = await import('../src/shots/render.ts')
+    const f = await fake()
+    process.env.FAKE_CHROME = mode
+    try {
+      shoot(f.bin, '<p>x</p>', 1320, 2868, f.out, f.tmp, 'iphone69/en-US #3 (practice)')
+      return { f, err: undefined as any }
+    } catch (err) {
+      return { f, err: err as any }
+    } finally {
+      delete process.env.FAKE_CHROME
+    }
+  }
+
+  it('retries once, so a one-off Chrome failure does not fail the render', async () => {
+    const { existsSync } = await import('node:fs')
+    const { pngSize } = await import('../src/shots/render.ts')
+    const { f, err } = await run('flaky')
+    assert.equal(err, undefined)
+    assert.deepEqual(pngSize(f.out), { w: 1320, h: 2868 })
+    assert.ok(!existsSync(`${f.tmp}/shot-${process.pid}.png`), 'the temp picture is cleaned up')
+  })
+
+  it('a persistent failure is RENDER_FAILED naming the picture, with the stderr tail, retry now', async () => {
+    const { existsSync } = await import('node:fs')
+    const { err, f } = await run('fail')
+    assert.equal(err.code, 'RENDER_FAILED')
+    assert.equal(err.retry, 'now')
+    assert.match(err.message, /could not render iphone69\/en-US #3 \(practice\)/)
+    assert.match(err.message, /attempt 1: Chrome exited with 3: .*boom: renderer crashed/)
+    assert.match(err.message, /attempt 2:/)
+    assert.ok(!existsSync(f.out), 'nothing half-written is left in the output folder')
+  })
+
+  it('an exit 0 with no file, or the wrong size, is a failure too', async () => {
+    assert.match((await run('nofile')).err.message, /exited normally but wrote no file/)
+    assert.match((await run('wrongsize')).err.message, /wrote 10×10 instead of 1320×2868/)
+  })
+})

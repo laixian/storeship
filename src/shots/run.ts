@@ -32,7 +32,7 @@ export function renderSet(s: ShotsSetup, d: Device, locale: string, chrome: stri
   s.slots.forEach((slot, i) => {
     if (only && !only.includes(slot.n)) return
     const out = s.outFile(d, locale, slot)
-    shoot(chrome, paintSlot(s.style, ctx, placed, i, ctx.img), d.w, d.h, out, s.tmp)
+    shoot(chrome, paintSlot(s.style, ctx, placed, i, ctx.img), d.w, d.h, out, s.tmp, `${d.id}/${locale} #${slot.n} (${slot.frame.slug})`)
     files.push(out)
     onFile?.(out)
   })

@@ -92,6 +92,7 @@ Apple's message points the wrong way often enough that translating it is one of 
 | `NOT_FOUND` | 1 | never | the object does not exist in App Store Connect |
 | `TIMEOUT` | 4 | after-wait | gave up waiting; the thing being waited for may still arrive |
 | `MISSING_TOOL` | 1 | never | something this command needs from outside is not there (Chrome, ffmpeg, idb, Xcode, a booted simulator) |
+| `RENDER_FAILED` | 1 | now | headless Chrome did not produce a picture, twice; the message names which one and carries its stderr |
 | `PENDING` | 4 | after-wait | it exists but is not ready yet; asking later gives a different answer |
 | `API` | 1 | never | App Store Connect refused, and the reason is only in Apple's message |
 | `AUTH` | 1 | never | Apple rejected the API key |

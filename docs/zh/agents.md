@@ -92,6 +92,7 @@ Apple 的报错指错方向的次数，多到「把它翻译过来」成了这�
 | `NOT_FOUND` | 1 | never | App Store Connect 上没有这个对象 |
 | `TIMEOUT` | 4 | after-wait | 等到超时放弃了；等的那件事可能仍会发生 |
 | `MISSING_TOOL` | 1 | never | 这条命令要用的外部东西不在（Chrome、ffmpeg、idb、Xcode、开着的模拟器） |
+| `RENDER_FAILED` | 1 | now | 无头 Chrome 连试两次都没出图；message 里写着是哪一张，带着它的 stderr |
 | `PENDING` | 4 | after-wait | 东西在，但还没就绪；过一会儿再问答案就不一样了 |
 | `API` | 1 | never | App Store Connect 拒绝了，原因只在 Apple 的报文里 |
 | `AUTH` | 1 | never | Apple 不认这把密钥 |

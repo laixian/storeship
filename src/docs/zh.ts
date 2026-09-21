@@ -201,6 +201,7 @@ export const ZH_ABOUT: Record<string, string> = {
   NOT_FOUND: 'App Store Connect 上没有这个对象',
   TIMEOUT: '等到超时放弃了；等的那件事可能仍会发生',
   MISSING_TOOL: '这条命令要用的外部东西不在（Chrome、ffmpeg、idb、Xcode、开着的模拟器）',
+  RENDER_FAILED: '无头 Chrome 连试两次都没出图；message 里写着是哪一张，带着它的 stderr',
   PENDING: '东西在，但还没就绪；过一会儿再问答案就不一样了',
   API: 'App Store Connect 拒绝了，原因只在 Apple 的报文里',
   AUTH: 'Apple 不认这把密钥',
