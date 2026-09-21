@@ -1,6 +1,6 @@
 # storeship for agents
 
-<!-- storeship 0.3.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 This page is for the person wiring an agent up to storeship. The agent itself does not need it: everything below is reachable at run time from `storeship spec --json`, `storeship state --json` and the `error` object of any command. That is the rule the tool is built on —
 

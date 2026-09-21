@@ -1,6 +1,6 @@
 # 给 agent 用的 storeship
 
-<!-- storeship 0.3.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 这一篇是写给「要把 agent 接到 storeship 上」的人的。agent 本身不需要读它：下面所有东西在运行时都能从 `storeship spec --json`、`storeship state --json` 和任意一条命令的 `error` 对象里拿到。这也正是整个工具遵循的那一条规则——
 

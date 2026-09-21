@@ -5,7 +5,7 @@ description: Make a vertical social video (Xiaohongshu / Reels / Shorts) from a 
 
 # Reel with storeship
 
-<!-- storeship 0.3.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.0 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 `storeship reel card`, `storeship reel pts`, `storeship reel make`. The card (title, points, brand, colours) comes from the project's `reel.content` file; the tool renders it with a transparent hole, rotates and crops the recording into the hole, and exports an mp4.
 
