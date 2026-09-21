@@ -5,7 +5,7 @@ description: Make an App Store preview video with storeship — record the simul
 
 # App Preview with storeship
 
-<!-- storeship 0.4.1 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.2 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 An App Preview is 15–30 s of real screen recording, no device frame, at an exact size per device (1920×886 landscape / 886×1920 portrait for iPhone, 1200×1600 for iPad). Commands: `storeship preview record`, `storeship preview stop`, `storeship preview cut`, `storeship preview check`, `storeship preview upload`, plus `storeship sim` to drive the app.
 
