@@ -15,7 +15,7 @@ Identifiers (app id, key id, issuer id, team id) are not secrets and belong in t
   "release":  { "scheduledTime": "08:00:00-07:00" },
   "products": { "monthly": "1234567891", "yearly": "1234567892" },
   "shots":    { "src": "store/screenshots", "out": "store/shots", "content": "store/shots/content.ts",
-                "template": "store/shots/template.ts", "devices": ["iphone69", "ipad13"],
+                "devices": ["iphone69", "ipad13"],
                 "localeTags": { "zh-Hans": "zh", "en-US": "en" }, "seed": "store/shots/seed.ts" },
   "reel":     { "content": "store/reel/content.ts" },
   "sim":      { "profile": "iphone69" }
@@ -49,9 +49,9 @@ Identifiers (app id, key id, issuer id, team id) are not secrets and belong in t
 | `products` | object | `{}` | Alias → subscription id, for `offer` commands. |
 | `shots.src` | path | `store/screenshots` | Raw simulator screenshots, `<prefix>-<localeTag>-<n>-<slug>.png`. |
 | `shots.out` | path | `store/shots` | Rendered, ASC-ready PNGs. |
-| `shots.content` | path | — | Module / JSON exporting `Shot[]` or `{ shots, devices?, template? }`. Required for `shots`. |
-| `shots.template` | path | built-in | Module exporting a template `{ render(ctx), titleLines?, titleMax?, snPattern? }`. |
-| `shots.devices` | string[] | every device the content lays out | Device ids to render by default. |
+| `shots.content` | path | — | Module / JSON exporting `{ style, frames, brand?, theme?, devices? }`. Required for `shots`. |
+| `shots.template` | — | — | Removed in 0.4; styles are chosen in the content file. Setting it is an error. |
+| `shots.devices` | string[] | `["iphone69"]` | Device ids to render by default. |
 | `shots.locales` | string[] | `locales` | Locales to render. |
 | `shots.localeTags` | object | `{}` | Locale code → short tag in filenames, e.g. `{"zh-Hans": "zh"}`. |
 | `shots.seed` | path | — | Project script run by `shots seed`; arguments are passed through. |

@@ -29,7 +29,7 @@
 - [`device`](#device) — 注册真机（装开发签名的包要用）
 - [`apps`](#apps) — 账号里的 App（用来找 app id）
 - [`analytics`](#analytics) — Analytics Reports API 与每日销售（要 Admin / Sales 角色的密钥）
-- [`shots`](#shots) — App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设备类型上传
+- [`shots`](#shots) — App Store 截图：校验、把真实截屏按风格渲染、联系表、按设备类型上传
 - [`preview`](#preview) — App Preview 视频：录模拟器、把 VFR 录屏剪成规格尺寸的成片、校验、上传
 - [`reel`](#reel) — 竖版社交视频：录屏摆进设计好的卡片里，音频按帧时间戳对齐
 - [`sim`](#sim) — 驱动开着的模拟器：点 / 拖 / 截图 / 状态栏 / 无障碍树（优先 idb，退路 CGEvent）
@@ -578,15 +578,15 @@ Analytics Reports API 与每日销售（要 Admin / Sales 角色的密钥）
 
 ## `shots`
 
-App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设备类型上传
+App Store 截图：校验、把真实截屏按风格渲染、联系表、按设备类型上传
 
 影响面: 只读 —— 什么都不改
 
-子命令: [`check`](#shots-check) · [`render`](#shots-render) · [`upload`](#shots-upload) · [`seed`](#shots-seed)
+子命令: [`check`](#shots-check) · [`render`](#shots-render) · [`upload`](#shots-upload) · [`styles`](#shots-styles) · [`seed`](#shots-seed)
 
 ### `shots check`
 
-校验内容、源图、裁剪，每个设备档的问题一次报完
+校验 frames、标题、源图和版式规则，每个设备档的问题一次报完
 
 用法: `storeship shots check [--device a,b] [--locale x,y]`
 
@@ -594,7 +594,7 @@ App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设�
 
 | 参数 | |
 |---|---|
-| `--device` | 设备档 id，逗号分隔；默认内容里排了版的全部设备档（或 shots.devices） |
+| `--device` | 设备档 id，逗号分隔；默认 shots.devices（没配就是 iphone69） |
 | `--locale` | locale，逗号分隔；默认配置里的 |
 
 ### `shots render`
@@ -609,8 +609,8 @@ App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设�
 |---|---|
 | `--device` | 设备档 id，逗号分隔 |
 | `--locale` | locale，逗号分隔 |
-| `--only` | 只重出这几张（序号，逗号分隔） |
-| `--sheet` | 同时在临时目录里出一张联系表 |
+| `--only` | 只重出这几张（商店里的位置，逗号分隔；hero 占两张） |
+| `--sheet` | 同时在临时目录里出两张联系表：商店间距的一张，无缝拼接的一张（查接缝用） |
 
 ### `shots upload`
 
@@ -626,6 +626,14 @@ App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设�
 | `--locale` | locale，逗号分隔 |
 | `--replace` | 先删光那个 set 里的截图 |
 | `--dry-run` | 只打印计划，不动任何东西 |
+
+### `shots styles`
+
+列出内置风格、各自的 theme 参数，以及所有风格都遵守的版式规则
+
+用法: `storeship shots styles`
+
+影响面: 只读 —— 什么都不改
 
 ### `shots seed`
 

@@ -6,33 +6,67 @@
 
 ## 截图
 
-真实的模拟器截屏 + 模板 + 内容文件 → 每个设备档 × 每种语言精确尺寸的 PNG，先校验、出联系表、按 display type 上传。
+真实的模拟器截屏 + 内容文件 + 风格 → 每个设备档 × 每种语言精确尺寸的 PNG，先校验、出联系表、按 display type 上传。
 
 ```bash
-storeship shots check                # 序号 / 标题 / 源图 / 裁剪，问题一次报完
-storeship shots render --sheet       # PNG 进 shots.out + 每个设备档 × 语言一张联系表
+storeship shots check                # frames / 标题 / 源图 / 版式规则，问题一次报完
+storeship shots render --sheet       # PNG 进 shots.out + 每个设备档 × 语言的联系表
+storeship shots styles               # 内置风格、各自的 theme 参数、版式规则
 storeship shots upload 1.4.0         # 进 ASC 对应的 set；只传新文件（--replace 全换）
 storeship shots seed -- --locale en  # 跑你自己的种演示数据脚本（shots.seed），参数透传
 ```
 
-源文件命名 `<prefix>-<localeTag>-<n>-<slug>.png`（`iphone-en-1-home.png`；同一张图的第二屏 `1b-<slug>`）。内置设备档：`iphone69`（1320×2868，APP_IPHONE_67）、`iphone67`、`iphone63`、`iphone65`、`iphone55`、`ipad13`（2064×2752，APP_IPAD_PRO_3GEN_129）、`ipad129`、`ipad11`；内容文件可以增加或覆盖。
+源文件命名 `<prefix>-<localeTag>-<stem>.png`（`iphone-en-1-home.png`），frame 里写 stem。内置设备档：`iphone69`（1320×2868，APP_IPHONE_67）、`iphone67`、`iphone63`、`iphone65`、`iphone55`、`ipad13`（2064×2752，APP_IPAD_PRO_3GEN_129）、`ipad129`、`ipad11`；内容文件可以增加或覆盖。产物命名 `<prefix>-<localeTag>-<n>-<slug>.png`，`n` 是商店里的位置。
 
-**内容**——导出 `Shot[]`（或 `{ shots, devices?, template? }`）的模块：
+**内容**——印哪几屏、什么顺序、标题写什么。没有任何坐标可写：
 
 ```ts
-import type { Shot } from 'storeship'
-export default [
-  { n: 1, slug: 'home', sn: 'HOME', bg: '#2FE9DF',
-    title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] },
-    cards: { iphone69: [{ x: 70, y: 820, w: 1400, h: 1185, sx: 0, sy: 0, sw: 1560 }] } },
-] satisfies Shot[]
+import type { ShotsContent } from 'storeship'
+export default {
+  style: 'stage',                                   // plain | stage | color | './my-style.ts'
+  theme: { accent: '#2FE9DF' },                     // 风格的参数（storeship shots styles）
+  brand: { logo: { src: '7-home', crop: [230, 290, 860, 370] } },   // 从真实截屏里裁
+  frames: [
+    { slug: 'rehearsal', sn: 'PROG', screen: '1-rehearsal', hero: {},   // 一台手机横跨第 1、2 张
+      title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] } },
+    { slug: 'practice', sn: 'TRSC', screen: '2-practice', title: { … } },
+    { slug: 'leadsheet', sn: 'LEAD', screen: { src: '3-leadsheet', anchor: 'end' }, title: { … } },
+    { slug: 'lobby', sn: 'ROOM', screens: ['4-lobby', '4b-members'], title: { … } },  // 两台：例外
+  ],
+} satisfies ShotsContent
 ```
 
-`cards[设备]` 是画布上的矩形；`sx/sy/sw` 是源图上的矩形（高度按卡片长宽比反推），所以裁剪永远是「放大看同一屏的一角」。缺某个设备档的排版是报错，不会静默出一张错图。
+**版式规则**——每台手机的位置由工具算，风格改不了：
 
-**模板**——可选；导出 `{ render(ctx) => html, titleLines?, titleMax?, snPattern? }` 的模块。`ctx` 有 `shot`、`locale`、`device`、`total`、`title`（这门语言的标题行）和 `cards`（各带 data-URI 的 `img` 和原生尺寸）。内置模板刻意朴素。
+- 整套只有一种手机尺寸。横屏就是同一台手机横过来，所以会从画布一侧出血截断（`anchor: 'start'` 留左端，`'end'` 留右端），而不是缩小塞进去。
+- 只有 hero 可以倾斜（默认 −4°，最多 8°）。hero 是一台手机横跨两张，接缝落在机身 `seamAt` 处（默认 0.46，允许 0.3–0.7），两半各自能读。第一张放品牌（从截屏裁的 logo，可选标语），第二张放这一帧的标题。它占十张里的两张。
+- 一张一台手机。两台是例外，而且两台的帧不能相邻——连着几张两台就乱。
+- 其余手机顶边都在同一条基线上，同一条中轴。
+- 属于某一张的东西裁在这一张里；只有 hero 和风格的背景能跨缝。
 
-检查器拒绝：序号不连、标题行数不对或为空、源图缺失或尺寸不对、裁剪越界、卡片两侧同时出血（一个圆角都看不见 → 读成一条色带）、设备档没排版。这条路上的错误本来全是静默的。
+整套图是一个 N 张宽的舞台，每张平移后截一次，所以跨缝的东西天然对齐。设备外框用 CSS 画（金属边、黑边、屏幕圆角、侧键）；灵动岛模拟器截屏里本来就有，不再画第二个。
+
+**风格**——`plain`（原来的样子：每张自己的 `bg`、步数、粗标题、裸截屏做圆角卡片），`stage`（一片暗底，accent 光晕、竖线、走针轨道贯穿整套；带外框），`color`（每张自己的 `bg`、深色字、带外框，轨道贯穿整套）。项目风格是导出 `Style` 的模块，一般在内置风格上改：
+
+```ts
+import type { StyleFactory } from 'storeship'
+// 导出一个工厂：正在跑的 storeship 把自己的零件递进来，风格就不依赖 node_modules 里装的是哪一版
+//（直接导出一个 Style 也行）
+export default (({ extendStyle, styleKit }) =>
+  extendStyle('stage', (base) => ({
+    id: 'mine',
+    titleMax: { 'zh-Hans': 8 },
+    backdrop: (s) => base.backdrop(s) + myStrip(s),   // 舞台坐标：s.stageW 宽
+  }))) satisfies StyleFactory
+```
+
+风格要实现 `metrics`（手机宽、基线、hero 中心、间距）、`css`、`backdrop`（在整个舞台上画一次）、`header`（每张，自动裁剪）、`brand`（hero 的前半张），声明 `tokens`、`look`（`bezel` | `card`），可选 `titleLines` / `titleMax` / `snPattern` / `needsBg`。公用的零件（轨道、竖线、logo 裁剪、转义）以 `styleKit` 导出。
+
+检查器拒绝：超过十张（hero 算两张）、源图缺失或尺寸不对、一帧没有屏或多于两屏、两台的帧相邻、hero 接缝不在 0.3–0.7 或倾斜超过 8°、hero 没有品牌或超出它的两张、竖屏写了 `anchor`、logo 裁剪越出源图、标题行数不对、未知 theme 参数、按张上色的风格缺 `bg`。这条路上的错误本来全是静默的。
+
+`--sheet` 每个设备档 × 语言出两张联系表：一张照商店的间距和圆角，一张无缝拼接用来查接缝。看这一排就是验收。
+
+**从 0.3 迁移**——`Shot[]` / `cards` / `template` 这套写法已删。每个 shot 改成一个 frame（`screen` 代替 `cards`，写 stem 而不是 `n-slug`），去掉 `shots.template`，选一个风格；`plain` 就是原来的样子。
 
 ## 模拟器驱动
 

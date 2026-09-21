@@ -15,7 +15,7 @@ storeship 只读一个文件：`storeship.config.json`（或导出同一个对�
   "release":  { "scheduledTime": "08:00:00-07:00" },
   "products": { "monthly": "1234567891", "yearly": "1234567892" },
   "shots":    { "src": "store/screenshots", "out": "store/shots", "content": "store/shots/content.ts",
-                "template": "store/shots/template.ts", "devices": ["iphone69", "ipad13"],
+                "devices": ["iphone69", "ipad13"],
                 "localeTags": { "zh-Hans": "zh", "en-US": "en" }, "seed": "store/shots/seed.ts" },
   "reel":     { "content": "store/reel/content.ts" },
   "sim":      { "profile": "iphone69" }
@@ -49,9 +49,9 @@ storeship 只读一个文件：`storeship.config.json`（或导出同一个对�
 | `products` | object | `{}` | 别名 → 订阅 id，给 `offer` 用 |
 | `shots.src` | 路径 | `store/screenshots` | 模拟器原始截屏，`<prefix>-<localeTag>-<n>-<slug>.png` |
 | `shots.out` | 路径 | `store/shots` | 渲好、可直接传 ASC 的 PNG |
-| `shots.content` | 路径 | — | 导出 `Shot[]` 或 `{ shots, devices?, template? }` 的模块 / JSON。`shots` 必填 |
-| `shots.template` | 路径 | 内置 | 导出模板 `{ render(ctx), titleLines?, titleMax?, snPattern? }` 的模块 |
-| `shots.devices` | string[] | 内容里排了版的全部设备档 | 默认渲哪些设备档 |
+| `shots.content` | 路径 | — | 导出 `{ style, frames, brand?, theme?, devices? }` 的模块 / JSON。`shots` 必填 |
+| `shots.template` | — | — | 0.4 起删除，风格在内容文件里选；配了会报错 |
+| `shots.devices` | string[] | `["iphone69"]` | 默认渲哪些设备档 |
 | `shots.locales` | string[] | `locales` | 渲哪些语言 |
 | `shots.localeTags` | object | `{}` | locale 码 → 文件名里的短标签，如 `{"zh-Hans": "zh"}` |
 | `shots.seed` | 路径 | — | `shots seed` 跑的项目脚本，参数原样透传 |

@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { StoreshipError } from '../errors.ts'
 import { which } from '../proc.ts'
-import type { Card, Device, Img, Shot, Template } from './types.ts'
 
 /** Width/height from the PNG IHDR (first 24 bytes) — no image library needed. */
 export function pngSize(file: string): { w: number; h: number } {
@@ -58,15 +57,17 @@ export function shoot(chrome: string, html: string, w: number, h: number, out: s
  * Contact sheet: the set side by side, the way the store page shows it.
  * This is the only real acceptance test — each picture looks fine alone;
  * only the row shows clashing backgrounds or a progression that stalls.
+ * `seamless` butts the frames together to check what runs across the seams;
+ * the default spaces and rounds them like the store does, which is how
+ * people will actually see the seams.
  */
-export function sheet(chrome: string, files: string[], out: string, tmpDir: string, thumb = 300): void {
+export function sheet(chrome: string, files: string[], out: string, tmpDir: string, o: { thumb?: number; seamless?: boolean } = {}): void {
+  const thumb = o.thumb ?? 300
+  const gap = o.seamless ? 0 : 14
+  const radius = o.seamless ? 0 : Math.round(thumb * 0.06)
   const tags = files.map((f) => `<img src="${dataUri(f)}">`).join('')
-  const html = `<!doctype html><style>body{margin:0;background:#555;display:flex;gap:14px;padding:14px}img{width:${thumb}px;display:block}</style>${tags}`
-  const h = Math.round((thumb * pngSize(files[0]!).h) / pngSize(files[0]!).w) + 28
-  shoot(chrome, html, files.length * (thumb + 14) + 14, h, out, tmpDir)
-}
-
-export function renderShot(template: Template, shot: Shot, locale: string, device: Device, total: number, imgFor: (card: Card) => Img): string {
-  const cards = (shot.cards[device.id] ?? []).map((card) => ({ card, img: imgFor(card) }))
-  return template.render({ shot, locale, device, total, title: shot.title[locale] ?? [], cards })
+  const html = `<!doctype html><style>body{margin:0;background:#555;display:flex;gap:${gap}px;padding:14px}img{width:${thumb}px;display:block;border-radius:${radius}px}</style>${tags}`
+  const first = pngSize(files[0]!)
+  const h = Math.round((thumb * first.h) / first.w) + 28
+  shoot(chrome, html, files.length * (thumb + gap) - gap + 28, h, out, tmpDir)
 }

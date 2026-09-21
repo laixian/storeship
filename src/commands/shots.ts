@@ -5,9 +5,20 @@ import { CheckFailed, StoreshipError, UsageError } from '../errors.ts'
 import { must } from '../proc.ts'
 import { checkShots } from '../shots/check.ts'
 import { loadShots, type ShotsSetup } from '../shots/load.ts'
-import { dataUri, findChrome, pngSize, renderShot, sheet, shoot } from '../shots/render.ts'
+import { findChrome, pngSize, sheet } from '../shots/render.ts'
+import { renderSet } from '../shots/run.ts'
+import { STYLES } from '../shots/styles/index.ts'
 import { uploadShots } from '../shots/upload.ts'
 import type { Device } from '../shots/types.ts'
+
+/** What `shots styles` prints; the rules themselves live in shots/layout.ts and shots/check.ts. */
+const LAYOUT_RULES = [
+  'one phone size for the whole set; a landscape screen is the same phone turned, running off one side (anchor start|end)',
+  'only a hero tilts (≤ 8°); a hero is one phone across two slots, the seam at seamAt (0.3–0.7) of its width',
+  'one phone per frame; two is the exception, and two-phone frames are never neighbours',
+  'every other phone starts on the same baseline, on the same axis',
+  'anything owned by a frame is clipped to it; only the hero and the style backdrop cross seams',
+]
 
 function selection(ctx: Ctx, s: ShotsSetup): { devices: Device[]; locales: string[]; only?: number[] } {
   const devices = (ctx.args.str('device')?.split(',') ?? s.deviceIds).map((id) => {
@@ -24,7 +35,7 @@ function runChecks(ctx: Ctx, s: ShotsSetup, devices: Device[], locales: string[]
   const fs = { exists: existsSync, pngSize }
   const problems: Record<string, string[]> = {}
   for (const d of devices) {
-    const bad = checkShots(s.content, d, locales, { template: s.template, srcFile: s.srcFile, fs, rel: (f) => f.replace(ctx.cfg.root + '/', '') })
+    const bad = checkShots(s.content, s.style, d, locales, { srcFile: s.srcFile, fs, rel: (f) => f.replace(ctx.cfg.root + '/', '') })
     if (bad.length) problems[d.id] = bad
   }
   return problems
@@ -39,30 +50,30 @@ function report(ctx: Ctx, problems: Record<string, string[]>): void {
 
 export const shotsCommand: Command = {
   name: 'shots',
-  summary: 'App Store screenshots: validate, render from real screenshots + template, contact sheet, upload by device type',
+  summary: 'App Store screenshots: validate, render real screenshots in a style, contact sheet, upload by device type',
   impact: 'read',
   sub: [
     {
       name: 'check',
-      summary: 'validate content, sources, crops for every device (all problems at once)',
+      summary: 'validate frames, titles, sources and the layout rules for every device (all problems at once)',
       usage: 'shots check [--device a,b] [--locale x,y]',
-      flags: { device: 'comma list of device ids; default: every device the content lays out (or shots.devices)', locale: 'comma list of locales; default: the configured ones' },
+      flags: { device: 'comma list of device ids; default: shots.devices (or iphone69)', locale: 'comma list of locales; default: the configured ones' },
       impact: 'read',
       run: async (ctx) => {
         const s = await loadShots(ctx.cfg)
         const { devices, locales } = selection(ctx, s)
         const problems = runChecks(ctx, s, devices, locales)
-        ctx.out.emit({ shots: s.content.shots.length, devices: devices.map((d) => d.id), locales, problems })
+        ctx.out.emit({ style: s.style.id, frames: s.content.frames.length, slots: s.slots.length, devices: devices.map((d) => d.id), locales, problems })
         report(ctx, problems)
         if (Object.keys(problems).length) throw new CheckFailed('shots check failed', 'fix every line above; nothing was rendered')
-        ctx.out.log(`ok: ${s.content.shots.length} shots × ${devices.map((d) => d.id).join(', ')} × ${locales.join(', ')}`)
+        ctx.out.log(`ok: ${s.slots.length} screenshots (${s.style.id}) × ${devices.map((d) => d.id).join(', ')} × ${locales.join(', ')}`)
       },
     },
     {
       name: 'render',
-      summary: 'render the set (checks first); --sheet also writes a contact sheet per device × locale',
+      summary: 'render the set (checks first); --sheet also writes contact sheets per device × locale',
       usage: 'shots render [--device a,b] [--locale x,y] [--only 1,2] [--sheet]',
-      flags: { device: 'comma list of device ids', locale: 'comma list of locales', only: 'comma list of shot numbers to re-render', sheet: 'also write a contact sheet per device × locale into the temp dir' },
+      flags: { device: 'comma list of device ids', locale: 'comma list of locales', only: 'comma list of store positions to re-render (a hero is two)', sheet: 'also write two contact sheets per device × locale into the temp dir: store spacing, and seamless for checking the seams' },
       booleans: ['sheet'],
       impact: 'write',
       needs: ['chrome'],
@@ -78,28 +89,19 @@ export const shotsCommand: Command = {
         mkdirSync(s.out, { recursive: true })
         const made: { device: string; locale: string; file: string }[] = []
         const sheets: string[] = []
-        const total = s.content.shots.length
         for (const d of devices) {
           for (const locale of locales) {
-            const files: string[] = []
-            for (const shot of s.content.shots) {
-              if (only && !only.includes(shot.n)) continue
-              const out = s.outFile(d, locale, shot)
-              const html = renderShot(s.template, shot, locale, d, total, (c) => {
-                const file = s.srcFile(d, locale, c.src ?? `${shot.n}-${shot.slug}`)
-                const nat = pngSize(file)
-                return { uri: dataUri(file), w: nat.w, h: nat.h }
-              })
-              shoot(chrome, html, d.w, d.h, out, s.tmp)
-              files.push(out)
-              made.push({ device: d.id, locale, file: out })
-              ctx.out.log(`  ${out.replace(ctx.cfg.root + '/', '')}`)
-            }
+            const files = renderSet(s, d, locale, chrome, only, (f) => {
+              made.push({ device: d.id, locale, file: f })
+              ctx.out.log(`  ${f.replace(ctx.cfg.root + '/', '')}`)
+            })
             if (ctx.args.bool('sheet') && files.length) {
-              const sf = join(s.tmp, `sheet-${d.id}-${s.tag(locale)}.png`)
-              sheet(chrome, files, sf, s.tmp)
-              sheets.push(sf)
-              ctx.out.log(`  contact sheet → ${sf}`)
+              for (const seamless of [false, true]) {
+                const sf = join(s.tmp, `sheet-${d.id}-${s.tag(locale)}${seamless ? '-seamless' : ''}.png`)
+                sheet(chrome, files, sf, s.tmp, { seamless })
+                sheets.push(sf)
+                ctx.out.log(`  contact sheet → ${sf}`)
+              }
             }
           }
         }
@@ -123,7 +125,7 @@ export const shotsCommand: Command = {
         const groups = []
         for (const locale of locales) {
           for (const d of devices) {
-            const files = s.content.shots.map((shot) => s.outFile(d, locale, shot))
+            const files = s.slots.map((slot) => s.outFile(d, locale, slot))
             const missing = files.filter((f) => !existsSync(f))
             if (missing.length) throw new StoreshipError(`not rendered yet: ${missing.map((f) => f.replace(ctx.cfg.root + '/', '')).join(', ')}`, 'run `storeship shots render` first', { code: 'CHECK_FAILED' })
             groups.push({ locale, displayType: d.displayType, files })
@@ -142,6 +144,28 @@ export const shotsCommand: Command = {
       },
     },
     {
+      name: 'styles',
+      summary: 'list the built-in styles, their theme tokens, and the layout rules every style follows',
+      usage: 'shots styles',
+      flags: {},
+      impact: 'read',
+      run: async (ctx) => {
+        const styles = Object.values(STYLES).map((st) => ({
+          id: st.id,
+          summary: st.summary,
+          look: st.look,
+          needsBg: !!st.needsBg,
+          tokens: Object.fromEntries(Object.entries(st.tokens).map(([k, t]) => [k, { type: t.type, default: t.default, doc: t.doc }])),
+        }))
+        ctx.out.emit({ styles, rules: LAYOUT_RULES })
+        for (const st of styles) {
+          ctx.out.log(`${st.id} — ${st.summary}`)
+          for (const [k, t] of Object.entries(st.tokens)) ctx.out.log(`    theme.${k} (${t.type}, default ${t.default}): ${t.doc}`)
+        }
+        ctx.out.log(`\nlayout rules (every style):\n${LAYOUT_RULES.map((r) => `  · ${r}`).join('\n')}`)
+      },
+    },
+    {
       name: 'seed',
       summary: "run the project's demo-data script against the simulator (args passed through)",
       usage: 'shots seed [-- args…]',
@@ -157,6 +181,6 @@ export const shotsCommand: Command = {
     },
   ],
   run: async () => {
-    throw new UsageError('shots needs a subcommand', 'storeship shots <check|render|upload|seed>')
+    throw new UsageError('shots needs a subcommand', 'storeship shots <check|render|upload|styles|seed>')
   },
 }

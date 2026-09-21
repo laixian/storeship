@@ -121,9 +121,10 @@ export const ZH: Record<string, ZhEntry> = {
   'analytics list': { summary: '已申请的报表及各自有几份实例' },
   'analytics fetch': { summary: '下载某报表最新一份实例，打成表', flags: { granularity: 'DAILY（默认）/ WEEKLY / MONTHLY' } },
   'analytics sales': { summary: '某 vendor number 的当日销售汇总' },
-  shots: { summary: 'App Store 截图：校验、用真实截屏 + 模板渲染、联系表、按设备类型上传' },
-  'shots check': { summary: '校验内容、源图、裁剪，每个设备档的问题一次报完', flags: { device: DEVICE_LIST + '；默认内容里排了版的全部设备档（或 shots.devices）', locale: LOCALE_LIST + '；默认配置里的' } },
-  'shots render': { summary: '渲染整套（先校验）；--sheet 顺带出每个设备档 × 语言的联系表', flags: { device: DEVICE_LIST, locale: LOCALE_LIST, only: '只重出这几张（序号，逗号分隔）', sheet: '同时在临时目录里出一张联系表' } },
+  shots: { summary: 'App Store 截图：校验、把真实截屏按风格渲染、联系表、按设备类型上传' },
+  'shots check': { summary: '校验 frames、标题、源图和版式规则，每个设备档的问题一次报完', flags: { device: DEVICE_LIST + '；默认 shots.devices（没配就是 iphone69）', locale: LOCALE_LIST + '；默认配置里的' } },
+  'shots render': { summary: '渲染整套（先校验）；--sheet 顺带出每个设备档 × 语言的联系表', flags: { device: DEVICE_LIST, locale: LOCALE_LIST, only: '只重出这几张（商店里的位置，逗号分隔；hero 占两张）', sheet: '同时在临时目录里出两张联系表：商店间距的一张，无缝拼接的一张（查接缝用）' } },
+  'shots styles': { summary: '列出内置风格、各自的 theme 参数，以及所有风格都遵守的版式规则' },
   'shots upload': { summary: '把渲好的截图按 display type 传进 App Store Connect（默认只传缺的）', flags: { device: DEVICE_LIST, locale: LOCALE_LIST, replace: '先删光那个 set 里的截图', 'dry-run': '只打印计划，不动任何东西' } },
   'shots seed': { summary: '对模拟器跑项目自己的种演示数据脚本（参数原样透传）' },
   sim: {

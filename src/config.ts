@@ -54,9 +54,9 @@ export type RawConfig = {
     src?: string
     /** Rendered, ASC-ready PNGs. */
     out?: string
-    /** Module exporting the shots (and optionally devices / template). */
+    /** Module exporting { style, frames, brand?, theme?, devices? }. */
     content?: string
-    /** Module exporting the template; default: the built-in one. */
+    /** Removed in 0.4 (styles live in the content file); set, it is an error with a migration hint. */
     template?: string
     /** Device ids to render; default: every device the content lays out. */
     devices?: string[]

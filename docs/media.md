@@ -6,44 +6,67 @@ Everything that produces a picture or a film: store screenshots composed from re
 
 ## Screenshots
 
-Real simulator screenshots + a template + a content file → exact-size PNGs for every device × locale, validated, with a contact sheet, uploaded by display type.
+Real simulator screenshots + a content file + a style → exact-size PNGs for every device × locale, validated, with contact sheets, uploaded by display type.
 
 ```bash
-storeship shots check                # every problem at once: numbering, titles, sources, crops
-storeship shots render --sheet       # PNGs into shots.out + a contact sheet per device × locale
+storeship shots check                # every problem at once: frames, titles, sources, layout rules
+storeship shots render --sheet       # PNGs into shots.out + contact sheets per device × locale
+storeship shots styles               # built-in styles, their theme tokens, the layout rules
 storeship shots upload 1.4.0         # into the right ASC set per device; only new files (--replace to wipe)
 storeship shots seed -- --locale en  # run your demo-data script (shots.seed), args passed through
 ```
 
-Config:
+Sources are named `<prefix>-<localeTag>-<stem>.png` (`iphone-en-1-home.png`), and a frame names its stem. Built-in devices: `iphone69` (1320×2868, APP_IPHONE_67), `iphone67`, `iphone63`, `iphone65`, `iphone55`, `ipad13` (2064×2752, APP_IPAD_PRO_3GEN_129), `ipad129`, `ipad11`; the content file may add or override devices. Outputs are `<prefix>-<localeTag>-<n>-<slug>.png`, `n` being the store position.
 
-```json
-"shots": {
-  "src": "store/screenshots",          "out": "store/shots",
-  "content": "store/shots/content.ts", "template": "store/shots/template.ts",
-  "devices": ["iphone69", "ipad13"],   "localeTags": { "zh-Hans": "zh", "en-US": "en" },
-  "seed": "store/shots/seed.ts"
-}
-```
-
-Source files are named `<prefix>-<localeTag>-<n>-<slug>.png` (`iphone-en-1-home.png`; a second screen for the same frame: `1b-<slug>`). Built-in devices: `iphone69` (1320×2868, APP_IPHONE_67), `iphone67`, `iphone63`, `iphone65`, `iphone55`, `ipad13` (2064×2752, APP_IPAD_PRO_3GEN_129), `ipad129`, `ipad11`; the content file may add or override devices.
-
-**Content** — a module exporting `Shot[]` (or `{ shots, devices?, template? }`):
+**Content** — which screens, in what order, what the titles say. There are no coordinates to write:
 
 ```ts
-import type { Shot } from 'storeship'
-export default [
-  { n: 1, slug: 'home', sn: 'HOME', bg: '#2FE9DF',
-    title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] },
-    cards: { iphone69: [{ x: 70, y: 820, w: 1400, h: 1185, sx: 0, sy: 0, sw: 1560 }] } },
-] satisfies Shot[]
+import type { ShotsContent } from 'storeship'
+export default {
+  style: 'stage',                                   // plain | stage | color | './my-style.ts'
+  theme: { accent: '#2FE9DF' },                     // the style's tokens (storeship shots styles)
+  brand: { logo: { src: '7-home', crop: [230, 290, 860, 370] } },   // cropped from a real screenshot
+  frames: [
+    { slug: 'rehearsal', sn: 'PROG', screen: '1-rehearsal', hero: {},   // one phone across store slots 1–2
+      title: { 'en-US': ['One playhead', 'the whole band'], 'zh-Hans': ['自动走针', '全员同一小节'] } },
+    { slug: 'practice', sn: 'TRSC', screen: '2-practice', title: { … } },
+    { slug: 'leadsheet', sn: 'LEAD', screen: { src: '3-leadsheet', anchor: 'end' }, title: { … } },
+    { slug: 'lobby', sn: 'ROOM', screens: ['4-lobby', '4b-members'], title: { … } },  // a pair: the exception
+  ],
+} satisfies ShotsContent
 ```
 
-`cards[device]` are rectangles on the canvas; `sx/sy/sw` is a rectangle on the source image (height follows the card's aspect), so a crop is always "zoom into a corner of the same screen". A missing device layout is an error, never a silently wrong picture.
+**Layout rules** — the tool places every phone; a style cannot change these:
 
-**Template** — optional; a module exporting `{ render(ctx) => html, titleLines?, titleMax?, snPattern? }`. `ctx` has `shot`, `locale`, `device`, `total`, `title` (the lines for this locale) and `cards` (each with a data-URI `img` and its native size). The built-in template is deliberately plain.
+- One phone size for the whole set. A landscape screen is the same phone turned sideways, so it runs off one side of the canvas (`anchor: 'start'` keeps its left end, `'end'` its right end) instead of shrinking.
+- Only a hero tilts (default −4°, at most 8°). A hero is one phone across two store slots; the seam cuts it at `seamAt` (default 0.46, allowed 0.3–0.7) so each half reads alone. The first slot carries the brand (logo crop, optional tagline), the second the frame's title. It counts as two of the ten screenshots.
+- One phone per frame. Two is the exception, and two-phone frames are never neighbours — a run of pairs reads as clutter.
+- Every other phone starts on the same baseline, on the same axis.
+- Whatever belongs to a frame is clipped to it; only the hero and the style's backdrop cross seams.
 
-The checker refuses: wrong numbering, missing or wrong-count title lines, missing or wrong-size sources, crops out of bounds, cards bleeding on both sides (no visible corner → reads as a colour band), and layouts missing for a device. Every failure on this path is otherwise silent.
+The whole set is rendered as one stage N canvases wide and screenshotted once per slot, shifted, so what crosses a seam lines up by construction. Devices are drawn in CSS (rim, bezel, screen corners, buttons); the Dynamic Island is already in simulator screenshots and is not drawn again.
+
+**Styles** — `plain` (the original look: each frame's `bg`, a step counter, bold title, bare screens as rounded cards), `stage` (one dark ground with accent glows, hairlines and a progress rail running through the set; framed devices), `color` (each frame's `bg`, dark ink, framed devices, the rail through the set). A project style is a module exporting a `Style`, usually built on one of these:
+
+```ts
+import type { StyleFactory } from 'storeship'
+// a factory: the running storeship hands over its own kit, so the style never depends on
+// which storeship version is in node_modules (exporting a plain Style works too)
+export default (({ extendStyle, styleKit }) =>
+  extendStyle('stage', (base) => ({
+    id: 'mine',
+    titleMax: { 'en-US': 20 },
+    backdrop: (s) => base.backdrop(s) + myStrip(s),   // stage coordinates: s.stageW wide
+  }))) satisfies StyleFactory
+```
+
+A style implements `metrics` (phone width, baseline, hero centre, gap), `css`, `backdrop` (painted once across the stage), `header` (per slot, clipped), `brand` (the hero's first half), and declares `tokens`, `look` (`bezel` | `card`) and optional `titleLines` / `titleMax` / `snPattern` / `needsBg`. Shared pieces (rail, hairlines, logo crop, escaping) are exported as `styleKit`.
+
+The checker refuses: more than ten screenshots (a hero counts twice), missing or wrong-size sources, a frame with no screen or more than two, neighbouring pairs, a hero seam outside 0.3–0.7 or tilt over 8°, a hero with no brand or one that overhangs its two slots, an `anchor` on a portrait screen, a logo crop outside its source, wrong title line counts, unknown theme tokens, and a missing `bg` where the style paints per frame. Every failure on this path is otherwise silent.
+
+`--sheet` writes two contact sheets per device × locale: spaced and rounded like the store, and seamless for checking what runs across the seams. The row is the acceptance test.
+
+**From 0.3** — the `Shot[]` / `cards` / `template` format is gone. Move each shot to a frame (`screen` instead of `cards`, the stem instead of `n-slug`), drop `shots.template`, and pick a style; `plain` is the old look.
 
 ## Simulator driver
 
