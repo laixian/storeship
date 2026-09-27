@@ -8,10 +8,10 @@
  * release tool nobody dares to run), or cancel anything.
  */
 import { attachLatestBuild, createVersion, requireVersion, submitVersion, writeWhatsNew } from '../asc/versions.ts'
-import { type Command } from '../ctx.ts'
+import { type Command, type Ctx } from '../ctx.ts'
 import { HOW, need } from '../config.ts'
 import { StoreshipError } from '../errors.ts'
-import { mb } from '../out.ts'
+import { mb, type NextStep } from '../out.ts'
 import { archive, exportArchive, uploadIpa } from '../ios/xcode.ts'
 import { preflight } from './ship.ts'
 import { whatsNewTexts } from './version.ts'
@@ -79,27 +79,36 @@ export const releaseCommand: Command = {
     await ctx.confirm('go?', `this builds, uploads${doSubmit ? ' and submits for review' : ''} — the version number, the date and the text are already decided by the human`)
 
     const steps: Record<string, unknown> = {}
+    // Every failure below names the one command that continues from where it stopped
+    // (design.md §3.6): the agent must never have to work out a resume point itself,
+    // let alone script one — improvised scripts are what an agent sandbox refuses.
+    const tail = `${date ? ` --date ${date}` : ''}${doSubmit ? '' : ' --no-submit'} --yes`
     if (doShip && pre) {
       const a = archivePath ? { archivePath, version, build: pre.versions.native.build ?? '0' } : await archive(pre.project, ctx.cfg, pre.versions, { quiet })
-      const e = await exportArchive(pre.project, ctx.cfg, a.archivePath, { quiet })
-      ctx.out.note(`   IPA ${mb(e.bytes)}; uploading`)
-      await uploadIpa(e.ipa, need(ctx.cfg.asc.keyId, 'key id', HOW.keyId), need(ctx.cfg.asc.issuerId, 'issuer id', HOW.issuerId), { quiet })
-      steps.ship = { archive: a.archivePath, ipa: e.ipa }
+      await resumeOn(ctx, { command: `storeship release ${version} --archive "${a.archivePath}"${tail}`, why: 'the archive is good; export and upload again from it instead of archiving for minutes', impact: 'write' }, async () => {
+        const e = await exportArchive(pre.project, ctx.cfg, a.archivePath, { quiet })
+        ctx.out.note(`   IPA ${mb(e.bytes)}; uploading`)
+        await uploadIpa(e.ipa, need(ctx.cfg.asc.keyId, 'key id', HOW.keyId), need(ctx.cfg.asc.issuerId, 'issuer id', HOW.issuerId), { quiet })
+        steps.ship = { archive: a.archivePath, ipa: e.ipa }
+      })
     }
-    const created = await createVersion(client, appId, version, { date, scheduledTime: ctx.cfg.release.scheduledTime })
-    ctx.out.note(`   version ${version}: ${created.created ? 'created' : `exists (${created.row.state})`}`)
-    steps.version = created
-    if (Object.keys(texts).length) {
-      const v = await requireVersion(client, appId, version)
-      steps.whatsNew = await writeWhatsNew(client, v.id, texts)
-      ctx.out.note(`   What's New written`)
-    }
-    const want = ctx.args.str('build') ?? pre?.versions.native.build
-    const att = await attachLatestBuild(client, appId, version, {
-      build: want,
-      wait: true,
-      timeoutMs: ctx.args.num('timeout', 40) * 60_000,
-      onWait: (b) => ctx.out.note(`   waiting for build ${want ?? '(newest)'}: ${b ? `${b.version} ${b.processingState}` : 'not visible yet'}`),
+    // From here on the build is in App Store Connect: a plain rerun would archive again and
+    // upload a build number Apple already has, so the way on is --no-ship with the build named.
+    const built = ctx.args.str('build') ?? pre?.versions.native.build
+    await resumeOn(ctx, { command: `storeship release ${version} --no-ship${built ? ` --build ${built}` : ''}${tail}`, why: 'the build is uploaded; redo only the App Store Connect half (every step there is idempotent)', impact: 'write' }, async () => {
+      const created = await createVersion(client, appId, version, { date, scheduledTime: ctx.cfg.release.scheduledTime })
+      ctx.out.note(`   version ${version}: ${created.created ? 'created' : `exists (${created.row.state})`}`)
+      steps.version = created
+      if (Object.keys(texts).length) {
+        const v = await requireVersion(client, appId, version)
+        steps.whatsNew = await writeWhatsNew(client, v.id, texts)
+        ctx.out.note(`   What's New written`)
+      }
+      const att = await attachLatestBuild(client, appId, version, {
+        build: built,
+        wait: true,
+        timeoutMs: ctx.args.num('timeout', 40) * 60_000,
+        onWait: (b) => ctx.out.note(`   waiting for build ${built ?? '(newest)'}: ${b ? `${b.version} ${b.processingState}` : 'not visible yet'}`),
     })
     ctx.out.note(`   attached build ${att.build.version}`)
     steps.attach = att
@@ -107,6 +116,7 @@ export const releaseCommand: Command = {
       steps.submit = await submitVersion(client, appId, version)
       ctx.out.note(`   submitted: ${(steps.submit as { state: string }).state}`)
     }
+    })
     ctx.out.emit(steps)
     ctx.out.changed(...plan.filter((p) => !p.skipped).map((p) => ({ kind: 'release-step', target: p.step, what: p.what })))
     ctx.out.next(
@@ -116,4 +126,14 @@ export const releaseCommand: Command = {
     )
     ctx.out.log(doSubmit ? `\n${version} is in the review queue.` : `\n${version} is ready.`)
   },
+}
+
+/** Run a step; if it throws, put the command that resumes it into `next` and rethrow. */
+async function resumeOn(ctx: Ctx, step: NextStep, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn()
+  } catch (e) {
+    ctx.out.next(step)
+    throw e
+  }
 }

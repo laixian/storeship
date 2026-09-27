@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto'
 import { describe, it } from 'node:test'
 import { createClient, RETRY_DELAYS_MS } from '../src/asc/client.ts'
 import { attachLatestBuild, classifyVersion, createVersion, submitVersion, watchVersion } from '../src/asc/versions.ts'
-import { uploadMedia } from '../src/asc/media.ts'
+import { isBroken, uploadMedia } from '../src/asc/media.ts'
 import { diffReview, pushReview } from '../src/asc/listing.ts'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -148,6 +148,26 @@ describe('media upload', () => {
     assert.equal(puts[0]!.h['X-A'], '1')
     assert.equal(commit.data.attributes.sourceFileChecksum, createHash('md5').update(bytes).digest('hex'))
     assert.equal(commit.data.attributes.uploaded, true)
+  })
+  it('retries a chunk PUT that Apple answers 5xx, and gives up on a 4xx', async () => {
+    const file = join(tmpdir(), `storeship-chunk-${process.pid}.png`)
+    writeFileSync(file, Buffer.from('0123456789'))
+    const reserve = () => ({ data: { id: 'shot1', attributes: { uploadOperations: [{ method: 'PUT', url: 'https://up/1', offset: 0, length: 10, requestHeaders: [] }] } } })
+    const { client } = fake({ 'POST /v1/appScreenshots': reserve, 'PATCH /v1/appScreenshots/shot1': () => ({ data: {} }) })
+    let n = 0
+    const r = await uploadMedia(client, 'screenshot', 'set1', file, async () => new Response('', { status: ++n <= 2 ? 503 : 200 }), async () => {})
+    assert.equal(r.chunks, 1)
+    assert.equal(n, 3)
+    await assert.rejects(
+      uploadMedia(client, 'screenshot', 'set1', file, async () => new Response('', { status: 403 }), async () => {}),
+      /chunk PUT failed 403/,
+    )
+  })
+})
+
+describe('half-uploaded items', () => {
+  it('AWAITING_UPLOAD and FAILED are not "already there"; processing and done are', () => {
+    assert.deepEqual(['AWAITING_UPLOAD', 'FAILED', 'UPLOAD_COMPLETE', 'COMPLETE'].map(isBroken), [true, true, false, false])
   })
 })
 

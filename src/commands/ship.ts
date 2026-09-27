@@ -34,12 +34,24 @@ export const shipCommand: Command = {
     ctx.out.note(`→ archiving ${project.scheme} ${v.version} (${v.build}) [${project.configuration}]`)
     const a = await archive(project, ctx.cfg, versions, { quiet })
     ctx.out.note(`→ exporting IPA (no API key here on purpose; see storeship --help ship)`)
-    const e = await exportArchive(project, ctx.cfg, a.archivePath, { quiet })
+    let e: Awaited<ReturnType<typeof exportArchive>>
+    try {
+      e = await exportArchive(project, ctx.cfg, a.archivePath, { quiet })
+    } catch (err) {
+      // design.md §3.6: the failure names the command that continues; the archive took minutes
+      ctx.out.next({ command: `storeship export "${a.archivePath}"`, why: 'the archive is good; export again from it instead of archiving again', impact: 'write' })
+      throw err
+    }
     ctx.out.note(`   ${e.ipa} (${mb(e.bytes)})`)
     let uploaded = false
     if (!ctx.args.bool('skip-upload')) {
       ctx.out.note('→ uploading (this step needs the API key)')
-      await uploadIpa(e.ipa, need(ctx.cfg.asc.keyId, 'key id', HOW.keyId), need(ctx.cfg.asc.issuerId, 'issuer id', HOW.issuerId), { quiet })
+      try {
+        await uploadIpa(e.ipa, need(ctx.cfg.asc.keyId, 'key id', HOW.keyId), need(ctx.cfg.asc.issuerId, 'issuer id', HOW.issuerId), { quiet })
+      } catch (err) {
+        ctx.out.next({ command: `storeship upload "${e.ipa}"`, why: 'the IPA is exported; upload it again', impact: 'write' })
+        throw err
+      }
       uploaded = true
     }
     ctx.out.emit({ version: a.version, build: a.build, archive: a.archivePath, ipa: e.ipa, bytes: e.bytes, uploaded })

@@ -1,6 +1,6 @@
 # storeship for agents
 
-<!-- storeship 0.4.3 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.4 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 This page is for the person wiring an agent up to storeship. The agent itself does not need it: everything below is reachable at run time from `storeship spec --json`, `storeship state --json` and the `error` object of any command. That is the rule the tool is built on —
 
@@ -138,11 +138,13 @@ Set `STORESHIP_NON_INTERACTIVE=1` when no one can answer a prompt. A confirmatio
 
 If the release half is refused anyway, run it as two commands — `storeship ship`, then `storeship release <version> --no-ship` — so a refusal on the build does not take the App Store Connect writes down with it.
 
-### Claude Code's auto mode: switch to accept edits before a release
+### Claude Code's auto mode
 
-Auto mode is a different gate, and the allow rules above do not open it. A model-based classifier reviews each command on its own reading, and it refuses what looks irreversible or outward-facing: deleting screenshots, an upload plus submit, a script that sends DELETE to App Store Connect. Once it has refused one command it tends to refuse the related ones too, down to `storeship shots upload --help`. A "yes, go ahead" typed into the chat does not change its answer. (2026-09-28: a 1.3.3 release stalled halfway through replacing its screenshots this way, with two sets left half-deleted.)
+storeship's own commands run under auto mode. In the 2026-09-28 release, auto mode allowed the whole of `release`, and it allowed `shots upload --replace` four times, although `--replace` deletes screenshots. The command it refused was the one written outside the tool: `--replace` had died on an Apple 500 halfway through a set, and the agent wrote a script that sent DELETE to App Store Connect directly. The classifier checks whether a command's intent matches what the human asked for. `storeship shots upload --replace` matches by its name; an ad-hoc script that deletes live data does not. Once it had refused, it went on refusing related commands, down to `--help`.
 
-So **ask the human to switch the session to accept edits mode (Shift+Tab) before starting a release**. There the allow rules decide, and anything outside them comes up as an ordinary permission prompt that the human can approve. If a command is refused in auto mode, stop and ask for the switch. Do not look for another way to perform the same action.
+Hence the design rule (design.md §3.6): **an agent never has to leave storeship to finish a release.** Either running the same command again converges, or the error's `next` names the command that continues. If an agent finds itself writing a script to get past a failure, that is a missing recovery path in storeship: stop, tell the human, and report it, rather than working around the sandbox.
+
+For a release nobody is watching, do not rely on auto mode's judgement. Use a fixed allowlist instead: headless `claude -p` with `--allowedTools "Bash(pnpm storeship *)"` (or the allow rules above), or skip the agent and run `storeship release <v> --yes` in CI. Keep the agent for the parts that need judgement: What's New, and what to change after a rejection.
 
 ## Skills
 

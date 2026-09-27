@@ -94,6 +94,37 @@ Ken 2026-09-08 定的方向：**这个工具包完全是 for agent 的**。0.2 �
 **这一版没验的**：所有改动都只有单测和只读命令实跑。信封、退出码、`state` 的 stage 机在一次
 **真发版**里的表现还没验过——按 §6 的教训，「时间」那一维（构建几分钟才出现、账号会过期）只有真跑才知道。
 
+## 3.6 每种失败都能用一条 storeship 命令续上（0.4.4，2026-09-28）
+
+> **agent 永远不需要离开 storeship 去完成一次发版。** 任何一步失败，要么原样重跑同一条命令就能续上，
+> 要么错误信封的 `next` 里写着那一条续跑命令。
+
+**为什么这是一条原则而不是一个 bug 修复**：1.3.3 发版时 `shots upload --replace` 遇到 Apple 的 500 就整条退出，
+原样重跑又会把刚换好的那组清空，于是 agent 只能自己写一段直接调 DELETE 的脚本。Claude Code 的 auto mode 拦下的
+**恰恰是这段脚本**，而同一会话里 storeship 自己的命令（`release` 整条、删截图的 `--replace` 四次）全部放行了。
+分类器看的是「这条命令的意图和用户的授权对不对得上」：`storeship shots upload --replace` 从名字上就对得上，
+一段来历不明、直接删线上数据的临时代码对不上。所以**工具一旦逼 agent 即兴发挥，就同时丢掉了两样东西**：
+可重复性，以及 agent 沙箱对它的信任。反过来，只要恢复路径都在工具里，auto mode 下的发版和有人盯着的发版是同一条路。
+
+这也回答了「全自动发版」和「agent 沙箱」的关系：**没人看着的发版不该靠 auto mode 的模型判断兜底**，
+而应该是 headless（`claude -p`）加确定性的白名单（`--allowedTools "Bash(pnpm storeship *)"` 或 settings 的 allow 规则），
+或者干脆不经过 agent，在 CI 里直接 `storeship release <v> --yes`。agent 只负责要判断的那一半：What's New、被拒之后改什么。
+这条原则保证的是：无论哪种跑法，走的都是同一组命令，不会有「只有交互会话里才走得通」的路。
+
+**实现上的三条推论**：
+
+| # | 推论 | 落在哪 |
+|---|------|--------|
+| 35 | **幂等的请求自己扛住瞬时故障**：GET / DELETE / PATCH 遇到 5xx / 429 / 断连退避重试（1+2+4+8+15 秒）；POST 不重试（可能已经建出对象，重试会重复）；DELETE 在一次失败之后回 404 算成功（第一次其实删掉了）。重试完仍失败报 `ASC_SERVER`（`retry: now`），不是 `API`（`never`）| `asc/client.ts`、`asc/media.ts` 的分片 PUT |
+| 36 | **重跑必须收敛，不能来回拆**：`--replace` 保留「文件名 + MD5 + 位置 + COMPLETE」都对得上的前缀，只删只传其余；半途死掉的上传（`AWAITING_UPLOAD` / `FAILED`）不算「已经在了」，重跑时删掉重传——否则按文件名跳过，那一格就永远是灰的 | `shots/upload.ts`、`commands/preview.ts`、`media.ts` 的 `isBroken` |
+| 37 | **失败时 `next` 写着续跑命令**，agent 不用自己推断从哪接：归档成功、导出或上传失败 → `release <v> --archive "<路径>"`（或 `ship` 下的 `export` / `upload`）；构建已经上传、ASC 那一半失败 → `release <v> --no-ship --build <N>`（原样重跑会重新归档，还会撞上 Apple 已经收过的构建号）| `commands/release.ts` 的 `resumeOn`、`commands/ship.ts` |
+
+另外两条同一次发版的附带修复：归档的完整 xcodebuild 日志落到归档旁边（`*.archive.log`），
+报错只剩「exit code 0 but produced no further output」这一种时自动重试一次（那次原样重跑就 ARCHIVE SUCCEEDED）。
+
+**加新命令时的检查**：它会写吗？写到一半死掉，原样重跑会不会收敛？不会的话，错误的 `next` 里有没有那条续跑命令？
+三个都答不上来，就是在给下一个 agent 留一个只能靠手写脚本才出得去的坑。
+
 ## 4. 从 od-mobile 抽出来时改掉的硬编码
 
 盘点见当天的会话，落到代码里的：app id 原来在五个文件各写一份、只有一处认环境变量 →

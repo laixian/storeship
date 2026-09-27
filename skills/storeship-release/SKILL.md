@@ -5,7 +5,7 @@ description: Release an iOS app to the App Store with the storeship CLI — buil
 
 # Releasing with storeship
 
-<!-- storeship 0.4.3 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.4 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 You drive `storeship` (run as `npx storeship …`, or `pnpm storeship …` in a pnpm repo).
 
@@ -73,7 +73,7 @@ Every step is idempotent: on failure, read `error.hint`, fix, run the same comma
 
 If the tool prompts for permission on every call, `storeship init` already wrote the allow rules into `.claude/settings.local.json`; if that file was not written, the rules are `Bash(storeship *)`, `Bash(npx storeship *)`, `Bash(pnpm storeship *)`.
 
-**In Claude Code, ask the human to switch to accept edits mode (Shift+Tab) before the release starts, if the session is in auto mode.** The allow rules do not open auto mode. Its classifier judges every command by itself and refuses what reads as irreversible, such as deleting screenshots or uploading and submitting. After one refusal it tends to refuse related commands too, and the human saying "go ahead" in the chat does not change that. If a command is refused in auto mode, stop and ask for the switch; do not find another way to perform the same action.
+**Never leave storeship to get past a failure.** Every failure either converges when you run the same command again or names the resume command in the error's `next`. Running `storeship` commands works under Claude Code's auto mode. What auto mode refuses is an improvised script that does the same thing directly, such as calling DELETE on App Store Connect. If you find yourself about to write one, stop: tell the human what failed and that storeship is missing a recovery path. Do not look for another way around the refusal.
 
 ## Store metadata
 

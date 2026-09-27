@@ -12,7 +12,8 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import { type AscClient, ok } from './client.ts'
+import { StoreshipError } from '../errors.ts'
+import { type AscClient, ok, RETRY_DELAYS_MS } from './client.ts'
 import { requireVersion, versionLocalizations } from './versions.ts'
 
 export type MediaSet = { kind: 'screenshots' | 'previews'; id: string; displayType: string; count: number; states: Record<string, number> }
@@ -44,7 +45,14 @@ export async function mediaStatus(c: AscClient, appId: string, version: string):
 
 export type Uploaded = { id: string; file: string; bytes: number; chunks: number; md5: string }
 
-export async function uploadMedia(c: AscClient, kind: 'screenshot' | 'preview', setId: string, file: string, fetchLike: (url: string, init: RequestInit) => Promise<Response> = (u, i) => fetch(u, i)): Promise<Uploaded> {
+export async function uploadMedia(
+  c: AscClient,
+  kind: 'screenshot' | 'preview',
+  setId: string,
+  file: string,
+  fetchLike: (url: string, init: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<Uploaded> {
   const bytes = readFileSync(file)
   const isShot = kind === 'screenshot'
   const type = isShot ? 'appScreenshots' : 'appPreviews'
@@ -66,8 +74,21 @@ export async function uploadMedia(c: AscClient, kind: 'screenshot' | 'preview', 
   for (const op of ops) {
     const headers: Record<string, string> = {}
     for (const h of op.requestHeaders ?? []) headers[h.name] = h.value
-    const res = await fetchLike(op.url, { method: op.method, headers, body: bytes.subarray(op.offset, op.offset + op.length) })
-    if (!res.ok) throw new Error(`chunk PUT failed ${res.status} at offset ${op.offset}`)
+    // A chunk PUT to the presigned URL is idempotent, so a transient failure is retried like
+    // the API calls are (client.ts); giving up here leaves a reserved, never-filled tile behind.
+    for (let attempt = 0; ; attempt++) {
+      let status = 0
+      try {
+        const res = await fetchLike(op.url, { method: op.method, headers, body: bytes.subarray(op.offset, op.offset + op.length) })
+        if (res.ok) break
+        status = res.status
+      } catch {
+        /* dropped connection: retry below */
+      }
+      if ((status && status < 500 && status !== 429) || attempt >= RETRY_DELAYS_MS.length)
+        throw new StoreshipError(`chunk PUT failed${status ? ` ${status}` : ''} at offset ${op.offset}`, 'run the same command again: the half-uploaded item is not COMPLETE, so it is deleted and uploaded afresh', { code: 'ASC_SERVER' })
+      await sleep(RETRY_DELAYS_MS[attempt]!)
+    }
   }
   const md5 = createHash('md5').update(bytes).digest('hex')
   ok(
@@ -121,3 +142,11 @@ export async function setItems(c: AscClient, kind: 'screenshot' | 'preview', set
 }
 
 export const md5Of = (file: string): string => createHash('md5').update(readFileSync(file)).digest('hex')
+
+/**
+ * An item left behind by an upload that died between reserve and commit
+ * (AWAITING_UPLOAD), or one Apple could not process (FAILED). It shows as a
+ * grey tile, and it has the file's name — so a rerun that skips "already
+ * there" by name would skip it forever. Callers delete these and upload again.
+ */
+export const isBroken = (state: string): boolean => state === 'AWAITING_UPLOAD' || state === 'FAILED'

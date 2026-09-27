@@ -11,7 +11,7 @@
  */
 import { basename } from 'node:path'
 import type { AscClient } from '../asc/client.ts'
-import { createScreenshotSet, deleteMedia, md5Of, setItems, uploadMedia } from '../asc/media.ts'
+import { createScreenshotSet, deleteMedia, isBroken, md5Of, setItems, uploadMedia } from '../asc/media.ts'
 import { requireVersion, versionLocalizations } from '../asc/versions.ts'
 import { StoreshipError } from '../errors.ts'
 
@@ -49,7 +49,12 @@ export async function uploadShots(
       if (!opts.dryRun) for (const it of doomed) await deleteMedia(c, 'screenshot', it.id)
       deleted = doomed.length
       have = new Set(g.files.slice(0, keep).map((f) => basename(f)))
-    } else have = new Set(existing.map((e) => e.fileName))
+    } else {
+      const broken = existing.filter((e) => isBroken(e.state))
+      if (!opts.dryRun) for (const it of broken) await deleteMedia(c, 'screenshot', it.id)
+      deleted = broken.length
+      have = new Set(existing.filter((e) => !isBroken(e.state)).map((e) => e.fileName))
+    }
     const files: string[] = []
     const skipped: string[] = []
     for (const f of g.files) {

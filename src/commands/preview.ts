@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { createPreviewSet, mediaStatus, setItems, deleteMedia, uploadMedia } from '../asc/media.ts'
+import { createPreviewSet, isBroken, mediaStatus, setItems, deleteMedia, uploadMedia } from '../asc/media.ts'
 import { EXIT } from '../codes.ts'
 import { type Command, type Ctx } from '../ctx.ts'
 import { StoreshipError, UsageError } from '../errors.ts'
@@ -158,13 +158,19 @@ export const previewCommand: Command = {
           setId = await createPreviewSet(ctx.client(), loc.localizationId, d.previewType)
           created = true
         }
-        const existing = await setItems(ctx.client(), 'preview', setId)
+        let existing = await setItems(ctx.client(), 'preview', setId)
+        // A half-uploaded preview from a run that died is not "already there" (media.ts `isBroken`)
+        let deleted = 0
+        for (const e of existing.filter((x) => isBroken(x.state))) {
+          await deleteMedia(ctx.client(), 'preview', e.id)
+          deleted++
+        }
+        existing = existing.filter((x) => !isBroken(x.state))
         if (existing.some((e) => e.fileName === basename(file)) && !ctx.args.bool('replace')) {
           ctx.out.emit({ setId, skipped: file })
           ctx.out.log(`${basename(file)} is already in ${locale} ${d.previewType}; pass --replace to re-upload`)
           return
         }
-        let deleted = 0
         if (ctx.args.bool('replace')) for (const e of existing) {
           await deleteMedia(ctx.client(), 'preview', e.id)
           deleted++

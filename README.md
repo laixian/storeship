@@ -99,7 +99,7 @@ npx storeship doctor          # every prerequisite, with the fix for each miss
 npx storeship state           # where the release is, and what to run next
 ```
 
-Driving it from Claude Code: switch the session to **accept edits** mode (Shift+Tab) before a release, not auto mode. Auto mode's classifier ignores the permission rule and refuses deletes and submits on its own judgement (details in [docs/agents.md](docs/agents.md#claude-codes-auto-mode-switch-to-accept-edits-before-a-release)).
+Driving it from Claude Code: auto mode is fine. If a failure ever tempts the agent to script around storeship, that is a missing recovery path in the tool, not something to push past the sandbox. For unattended releases use a fixed allowlist (headless `claude -p` or CI) rather than auto mode's judgement. Details are in [docs/agents.md](docs/agents.md#claude-codes-auto-mode).
 
 Put the private key where Apple's own `altool` also looks:
 

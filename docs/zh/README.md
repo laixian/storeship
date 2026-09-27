@@ -98,7 +98,7 @@ npx storeship doctor          # 逐项检查，缺什么说怎么补
 npx storeship state           # 发布走到哪了，下一步跑什么
 ```
 
-用 Claude Code 跑发版时，先把会话切到 **accept edits** 模式（Shift+Tab），别用 auto mode。auto mode 的分类器不认那条权限规则，会按自己的判断拒掉删除和提审（见 [agents.md](agents.md)）。
+用 Claude Code 跑发版时，auto mode 可以直接用。如果某次失败让 agent 想写脚本绕开 storeship，那是工具少了一条恢复路径，不该去硬闯沙箱。没人盯着的发版，用固定白名单（headless 的 `claude -p` 或 CI），不要靠 auto mode 的判断（见 [agents.md](agents.md)）。
 
 私钥放 Apple 自己的 `altool` 也会去找的位置：
 
