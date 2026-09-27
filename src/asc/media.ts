@@ -110,11 +110,14 @@ export async function deleteMedia(c: AscClient, kind: 'screenshot' | 'preview', 
 }
 
 /** Items in a set, in display order. */
-export async function setItems(c: AscClient, kind: 'screenshot' | 'preview', setId: string): Promise<{ id: string; fileName: string; state: string }[]> {
+export async function setItems(c: AscClient, kind: 'screenshot' | 'preview', setId: string): Promise<{ id: string; fileName: string; state: string; checksum?: string }[]> {
   const [setType, itemType] = kind === 'screenshot' ? ['appScreenshotSets', 'appScreenshots'] : ['appPreviewSets', 'appPreviews']
   return (await c.all(`/v1/${setType}/${setId}/${itemType}?limit=50`)).map((it: any) => ({
     id: it.id,
     fileName: it.attributes.fileName,
     state: it.attributes.assetDeliveryState?.state ?? 'UNKNOWN',
+    checksum: it.attributes.sourceFileChecksum ?? undefined,
   }))
 }
+
+export const md5Of = (file: string): string => createHash('md5').update(readFileSync(file)).digest('hex')

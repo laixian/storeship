@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createVerify, generateKeyPairSync } from 'node:crypto'
 import { describe, it } from 'node:test'
-import { createClient, explain, signJwt } from '../src/asc/client.ts'
+import { createClient, explain, ok, RETRY_DELAYS_MS, signJwt } from '../src/asc/client.ts'
 import { hintFor } from '../src/hints.ts'
 
 const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
@@ -42,6 +42,32 @@ describe('client', () => {
       return true
     })
     assert.equal(calls.length, 3)
+  })
+  it('retries a transient 5xx on DELETE / GET, never on POST, and gives up with a retryable code', async () => {
+    const e500 = () => new Response(JSON.stringify({ errors: [{ status: '500', code: 'UNEXPECTED_ERROR', detail: 'An unexpected error occurred on the server side.' }] }), { status: 500 })
+    const script: Record<string, (() => Response)[]> = {
+      'DELETE /a': [e500, e500, () => new Response(null, { status: 204 })],
+      'DELETE /gone': [e500, () => new Response(JSON.stringify({ errors: [{ status: '404' }] }), { status: 404 })],
+      'POST /p': [e500, () => new Response('{}', { status: 201 })],
+      'GET /never': Array.from({ length: 10 }, () => e500),
+    }
+    const calls: string[] = []
+    const slept: number[] = []
+    const fetchLike = async (url: string, init?: RequestInit): Promise<Response> => {
+      const k = `${init?.method} ${new URL(url).pathname}`
+      calls.push(k)
+      return script[k]!.shift()!()
+    }
+    const c = createClient({ keyId: 'K', issuerId: 'I', keyPem: pem, fetch: fetchLike, sleep: async (ms) => void slept.push(ms) })
+    assert.equal((await c.delete('/a')).status, 204)
+    assert.equal((await c.delete('/gone')).status, 204, 'a 404 after a lost answer means the first DELETE went through')
+    assert.equal((await c.post('/p', {})).status, 500, 'a POST may have created the object; retrying would duplicate it')
+    const r = await c.get('/never')
+    assert.equal(r.status, 500)
+    assert.equal(calls.filter((k) => k === 'GET /never').length, RETRY_DELAYS_MS.length + 1)
+    assert.equal(calls.filter((k) => k === 'POST /p').length, 1)
+    assert.throws(() => ok(r, 'GET /never'), (e: any) => e.code === 'ASC_SERVER' && /run the same command again/.test(e.hint))
+    assert.ok(slept.length > 0)
   })
   it('explain collapses repeated errors', () => {
     const r = { status: 409, text: '', json: { errors: Array.from({ length: 3 }, () => ({ code: 'X', detail: 'same', source: { pointer: '/data' } })) } }

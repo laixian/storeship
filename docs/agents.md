@@ -1,6 +1,6 @@
 # storeship for agents
 
-<!-- storeship 0.4.2 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.3 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 This page is for the person wiring an agent up to storeship. The agent itself does not need it: everything below is reachable at run time from `storeship spec --json`, `storeship state --json` and the `error` object of any command. That is the rule the tool is built on —
 
@@ -95,6 +95,7 @@ Apple's message points the wrong way often enough that translating it is one of 
 | `RENDER_FAILED` | 1 | now | headless Chrome did not produce a picture, twice; the message names which one and carries its stderr |
 | `PENDING` | 4 | after-wait | it exists but is not ready yet; asking later gives a different answer |
 | `API` | 1 | never | App Store Connect refused, and the reason is only in Apple's message |
+| `ASC_SERVER` | 1 | now | App Store Connect answered 5xx / 429 even after the built-in retries; the same command again usually goes through |
 | `AUTH` | 1 | never | Apple rejected the API key |
 | `KEY_ROLE` | 1 | never | the key's role is too low for this endpoint |
 | `KEY_MISSING` | 5 | never | the .p8 is not where it should be, and it can only be downloaded once |
@@ -136,6 +137,12 @@ Set `STORESHIP_NON_INTERACTIVE=1` when no one can answer a prompt. A confirmatio
 ```
 
 If the release half is refused anyway, run it as two commands — `storeship ship`, then `storeship release <version> --no-ship` — so a refusal on the build does not take the App Store Connect writes down with it.
+
+### Claude Code's auto mode: switch to accept edits before a release
+
+Auto mode is a different gate, and the allow rules above do not open it. A model-based classifier reviews each command on its own reading, and it refuses what looks irreversible or outward-facing: deleting screenshots, an upload plus submit, a script that sends DELETE to App Store Connect. Once it has refused one command it tends to refuse the related ones too, down to `storeship shots upload --help`. A "yes, go ahead" typed into the chat does not change its answer. (2026-09-28: a 1.3.3 release stalled halfway through replacing its screenshots this way, with two sets left half-deleted.)
+
+So **ask the human to switch the session to accept edits mode (Shift+Tab) before starting a release**. There the allow rules decide, and anything outside them comes up as an ordinary permission prompt that the human can approve. If a command is refused in auto mode, stop and ask for the switch. Do not look for another way to perform the same action.
 
 ## Skills
 

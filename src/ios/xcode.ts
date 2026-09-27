@@ -10,11 +10,12 @@
  * -allowProvisioningUpdates Xcode requests the distribution certificate at
  * export time. Rule: export without the key, upload with the key.
  */
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { type Config, HOW, need } from '../config.ts'
 import { StoreshipError } from '../errors.ts'
+import { hintFor } from '../hints.ts'
 import { capture, must, run } from '../proc.ts'
 
 export type Project = {
@@ -184,17 +185,43 @@ export function exportOptionsPlist(teamId: string, extra: Record<string, unknown
 
 export type Archived = { archivePath: string; version: string; build: string }
 
+/**
+ * True when every `error:` line in an xcodebuild log is Xcode's own
+ * "the following command failed with exit code 0 but produced no further
+ * output" — a build step that reported failure without saying anything.
+ *
+ * 2026-09-28 (1.3.3): the archive failed with exit 65 and nothing but two of
+ * those lines; the same command on the same tree, run again straight away,
+ * printed ARCHIVE SUCCEEDED. A real compile or signing error always comes
+ * with an `error:` line of its own, so this signature is safe to retry once.
+ */
+export function flakyArchiveFailure(output: string): boolean {
+  const errors = output.split('\n').filter((l) => /\berror:/.test(l))
+  return errors.length > 0 && errors.every((l) => /failed with exit code 0 but produced no further output/.test(l))
+}
+
 export async function archive(p: Project, cfg: Config, v: Versions, opts: { quiet?: boolean } = {}): Promise<Archived> {
   const version = v.native.version ?? 'unknown'
   const build = v.native.build ?? '0'
   const day = new Date().toISOString().slice(0, 10)
   const archivePath = join(cfg.ios.archiveDir, day, `${p.scheme} ${version} build ${build}.xcarchive`)
-  await must(
-    'xcodebuild',
-    ['archive', '-workspace', p.workspace, '-scheme', p.scheme, '-configuration', p.configuration, '-destination', 'generic/platform=iOS', '-archivePath', archivePath, '-allowProvisioningUpdates', '-quiet'],
-    'archive',
-    { cwd: p.projectDir, quiet: opts.quiet },
-  )
+  // The whole log goes next to the archive: the error summary below is a filter over
+  // it, and on 2026-09-28 that filter was all there was — two lines that explained nothing.
+  const logPath = `${archivePath.replace(/\.xcarchive$/, '')}.archive.log`
+  mkdirSync(dirname(logPath), { recursive: true })
+  const args = ['archive', '-workspace', p.workspace, '-scheme', p.scheme, '-configuration', p.configuration, '-destination', 'generic/platform=iOS', '-archivePath', archivePath, '-allowProvisioningUpdates', '-quiet']
+  let r = await run('xcodebuild', args, { cwd: p.projectDir, quiet: opts.quiet })
+  writeFileSync(logPath, r.output)
+  if (r.code !== 0 && flakyArchiveFailure(r.output)) {
+    process.stderr.write(`archive failed with only "exit code 0 but produced no further output"; retrying once (log: ${logPath})\n`)
+    r = await run('xcodebuild', args, { cwd: p.projectDir, quiet: opts.quiet })
+    appendFileSync(logPath, `\n\n===== retry =====\n\n${r.output}`)
+  }
+  if (r.code !== 0) {
+    const tail = r.output.split('\n').filter((l) => /error|fail|❌/i.test(l)).slice(-8).join('\n') || r.output.slice(-800)
+    const h = hintFor(r.output)
+    throw new StoreshipError(`archive failed (exit ${r.code})\n${tail}\nfull log: ${logPath}`, h?.hint ?? `the lines above are a filter; the cause is usually earlier in ${logPath}`, { code: h?.code, humanAction: h?.humanAction })
+  }
   return { archivePath, version, build }
 }
 

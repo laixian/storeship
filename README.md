@@ -99,6 +99,8 @@ npx storeship doctor          # every prerequisite, with the fix for each miss
 npx storeship state           # where the release is, and what to run next
 ```
 
+Driving it from Claude Code: switch the session to **accept edits** mode (Shift+Tab) before a release, not auto mode. Auto mode's classifier ignores the permission rule and refuses deletes and submits on its own judgement (details in [docs/agents.md](docs/agents.md#claude-codes-auto-mode-switch-to-accept-edits-before-a-release)).
+
 Put the private key where Apple's own `altool` also looks:
 
 ```

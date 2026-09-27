@@ -204,6 +204,7 @@ export const ZH_ABOUT: Record<string, string> = {
   RENDER_FAILED: '无头 Chrome 连试两次都没出图；message 里写着是哪一张，带着它的 stderr',
   PENDING: '东西在，但还没就绪；过一会儿再问答案就不一样了',
   API: 'App Store Connect 拒绝了，原因只在 Apple 的报文里',
+  ASC_SERVER: 'App Store Connect 内置重试之后仍然回 5xx / 429；原样再跑一次通常就过',
   AUTH: 'Apple 不认这把密钥',
   KEY_ROLE: '这把密钥的角色不够调这个接口',
   KEY_MISSING: '.p8 不在该在的位置，而它只能下载一次',

@@ -2,10 +2,16 @@
  * Push rendered screenshots into App Store Connect by display type, so
  * nobody has to copy set ids around. Existing files with the same name are
  * kept unless `replace`; new files are appended in store order.
+ *
+ * `replace` makes the set equal to the local files, and is safe to run again
+ * after it died halfway (2026-09-28, Apple 500s on DELETE): the leading items
+ * that already are the right files — same name, same MD5, same position,
+ * processed — stay, and only the rest is deleted and uploaded. Without that a
+ * rerun wiped the set it had just finished and went on to fail on the next one.
  */
 import { basename } from 'node:path'
 import type { AscClient } from '../asc/client.ts'
-import { createScreenshotSet, deleteMedia, setItems, uploadMedia } from '../asc/media.ts'
+import { createScreenshotSet, deleteMedia, md5Of, setItems, uploadMedia } from '../asc/media.ts'
 import { requireVersion, versionLocalizations } from '../asc/versions.ts'
 import { StoreshipError } from '../errors.ts'
 
@@ -36,11 +42,14 @@ export async function uploadShots(
     }
     const existing = set ? await setItems(c, 'screenshot', setId) : []
     let deleted = 0
-    if (opts.replace && existing.length && !opts.dryRun) {
-      for (const it of existing) await deleteMedia(c, 'screenshot', it.id)
-      deleted = existing.length
-    }
-    const have = new Set(opts.replace ? [] : existing.map((e) => e.fileName))
+    let have: Set<string>
+    if (opts.replace) {
+      const keep = matchingPrefix(existing, g.files)
+      const doomed = existing.slice(keep)
+      if (!opts.dryRun) for (const it of doomed) await deleteMedia(c, 'screenshot', it.id)
+      deleted = doomed.length
+      have = new Set(g.files.slice(0, keep).map((f) => basename(f)))
+    } else have = new Set(existing.map((e) => e.fileName))
     const files: string[] = []
     const skipped: string[] = []
     for (const f of g.files) {
@@ -57,4 +66,22 @@ export async function uploadShots(
     plans.push({ locale: g.locale, displayType: g.displayType, setId, created, files, skipped, deleted })
   }
   return plans
+}
+
+/**
+ * How many leading items of the set already are the leading local files.
+ * Stops at the first difference: everything after it is out of order at best,
+ * and the store shows screenshots in set order.
+ * ⚠️ Same name is not enough — a re-shot frame keeps its file name
+ * (`…-8-home.png`), so the MD5 decides.
+ */
+export function matchingPrefix(existing: { fileName: string; state: string; checksum?: string }[], files: string[]): number {
+  let n = 0
+  while (n < existing.length && n < files.length) {
+    const e = existing[n]!
+    const f = files[n]!
+    if (e.fileName !== basename(f) || e.state !== 'COMPLETE' || !e.checksum || e.checksum !== md5Of(f)) break
+    n++
+  }
+  return n
 }

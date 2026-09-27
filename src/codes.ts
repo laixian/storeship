@@ -58,6 +58,7 @@ export const CODES = {
   RENDER_FAILED: { exit: EXIT.error, retry: 'now', about: 'headless Chrome did not produce a picture, twice; the message names which one and carries its stderr' },
   PENDING: { exit: EXIT.pending, retry: 'after-wait', about: 'it exists but is not ready yet; asking later gives a different answer' },
   API: { exit: EXIT.error, retry: 'never', about: "App Store Connect refused, and the reason is only in Apple's message" },
+  ASC_SERVER: { exit: EXIT.error, retry: 'now', about: 'App Store Connect answered 5xx / 429 even after the built-in retries; the same command again usually goes through' },
   AUTH: { exit: EXIT.error, retry: 'never', about: 'Apple rejected the API key' },
   KEY_ROLE: { exit: EXIT.error, retry: 'never', about: "the key's role is too low for this endpoint" },
   KEY_MISSING: { exit: EXIT.human, retry: 'never', about: 'the .p8 is not where it should be, and it can only be downloaded once' },

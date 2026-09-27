@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
 import { describe, it } from 'node:test'
-import { createClient } from '../src/asc/client.ts'
+import { createClient, RETRY_DELAYS_MS } from '../src/asc/client.ts'
 import { attachLatestBuild, classifyVersion, createVersion, submitVersion, watchVersion } from '../src/asc/versions.ts'
 import { uploadMedia } from '../src/asc/media.ts'
 import { diffReview, pushReview } from '../src/asc/listing.ts'
@@ -25,7 +25,7 @@ function fake(routes: Record<string, Route>): { client: ReturnType<typeof create
     const status = (body as any)?.__status ?? (init?.method === 'POST' ? 201 : 200)
     return new Response(JSON.stringify(body), { status })
   }
-  return { client: createClient({ keyId: 'K', issuerId: 'I', keyPem: pem, fetch: fetchLike }), log }
+  return { client: createClient({ keyId: 'K', issuerId: 'I', keyPem: pem, fetch: fetchLike, sleep: async () => {} }), log }
 }
 
 const versions = (state = 'PREPARE_FOR_SUBMISSION') => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: state, platform: 'IOS' } }] })
@@ -240,10 +240,13 @@ describe('watching a review', () => {
 describe('watch backs off instead of dying', () => {
   const versionRoute = { 'GET /v1/apps/A/appStoreVersions': () => ({ data: [{ id: 'v1', attributes: { versionString: '1.0', appVersionState: 'IN_REVIEW', platform: 'IOS' } }] }) }
   it('retries a 429 with a growing wait, then carries on', async () => {
+    // The client already retries every GET RETRY_DELAYS_MS.length times; watch's own
+    // backoff sits above that and sees a failure only once the client gave up.
+    const perFailure = RETRY_DELAYS_MS.length + 1
     let calls = 0
     const { client } = fake({
       ...versionRoute,
-      'GET /v1/apps/A/reviewSubmissions': () => (++calls <= 2 ? { __status: 429, errors: [{ detail: 'rate limit' }] } : { data: [] }),
+      'GET /v1/apps/A/reviewSubmissions': () => (++calls <= 2 * perFailure ? { __status: 429, errors: [{ detail: 'rate limit' }] } : { data: [] }),
     })
     const waits: number[] = []
     const retries: number[] = []

@@ -27,7 +27,25 @@ export type ClientOptions = {
   base?: string
   /** Seconds since epoch; injectable for tests. */
   now?: () => number
+  /** Waits between retries; injectable so tests do not sleep. */
+  sleep?: (ms: number) => Promise<void>
 }
+
+/**
+ * Backoff for a transient answer (5xx, 429, or the connection dropping).
+ * Only idempotent methods are retried — see `request`.
+ *
+ * 2026-09-28: `shots upload --replace` deletes one screenshot at a time, and
+ * App Store Connect answered roughly one DELETE in six with a bare
+ * `500 UNEXPECTED_ERROR`. The screenshot was still there afterwards, and the
+ * same DELETE a few seconds later went through. Without a retry the command
+ * died four times in a row halfway through a set, leaving the version with
+ * three screenshots where there had been seven.
+ */
+export const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000]
+
+const IDEMPOTENT = new Set(['GET', 'DELETE', 'PATCH'])
+const transient = (status: number): boolean => status >= 500 || status === 429
 
 const b64 = (o: unknown): string =>
   Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url')
@@ -49,7 +67,13 @@ export class AscError extends StoreshipError {
     // The hint table is also the code table: a message Apple points the wrong way
     // with is exactly the one an agent must not branch on by prose.
     const h = hintFor(detail)
-    super(`${context}: ${detail}`, h?.hint, { code: h?.code ?? 'API', humanAction: h?.humanAction })
+    // A 5xx that is still there after the retries in `request` is Apple's side, not the request's:
+    // the same command again is the right move, so it must not arrive as the `never` of API.
+    const server = transient(result.status)
+    super(`${context}: ${detail}`, h?.hint ?? (server ? `App Store Connect kept failing on its side (already retried ${RETRY_DELAYS_MS.length} times over about half a minute); run the same command again in a minute — every step it already finished is kept` : undefined), {
+      code: h?.code ?? (server ? 'ASC_SERVER' : 'API'),
+      humanAction: h?.humanAction,
+    })
     this.name = 'AscError'
     this.result = result
   }
@@ -105,7 +129,9 @@ export function createClient(o: ClientOptions): AscClient {
   }
   const token = (): string => signJwt({ keyId: o.keyId, issuerId: o.issuerId, keyPem: keyPem(), now: o.now?.() })
 
-  const request = async (method: string, path: string, body?: unknown): Promise<AscResult> => {
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+
+  const once = async (method: string, path: string, body?: unknown): Promise<AscResult> => {
     const res = await doFetch(path.startsWith('http') ? path : base + path, {
       method,
       headers: {
@@ -122,6 +148,36 @@ export function createClient(o: ClientOptions): AscClient {
       /* CSV / empty body */
     }
     return { status: res.status, json, text }
+  }
+
+  /**
+   * ⚠️ POST is never retried: a POST that timed out or answered 500 may still
+   * have created the object (a reserved screenshot, a version), and a second
+   * one makes a duplicate. GET / DELETE / PATCH land in the same state however
+   * many times they run.
+   * ⚠️ A DELETE that answers 404 after an earlier transient failure counts as
+   * done: the first attempt did go through, only its answer was lost.
+   */
+  const request = async (method: string, path: string, body?: unknown): Promise<AscResult> => {
+    if (!IDEMPOTENT.has(method)) return once(method, path, body)
+    let failedBefore = false
+    for (let attempt = 0; ; attempt++) {
+      let r: AscResult | undefined
+      let thrown: unknown
+      try {
+        r = await once(method, path, body)
+      } catch (e) {
+        thrown = e
+      }
+      if (r && method === 'DELETE' && r.status === 404 && failedBefore) return { status: 204, json: null, text: '' }
+      const retryable = thrown !== undefined || (r !== undefined && transient(r.status))
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) {
+        if (thrown !== undefined) throw thrown
+        return r!
+      }
+      failedBefore = true
+      await sleep(RETRY_DELAYS_MS[attempt]!)
+    }
   }
 
   const all = async (path: string): Promise<any[]> => {

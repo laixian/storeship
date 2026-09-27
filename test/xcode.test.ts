@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { exportOptionsPlist, parseXcodeAccounts, resolveBuildSetting } from '../src/ios/xcode.ts'
+import { exportOptionsPlist, flakyArchiveFailure, parseXcodeAccounts, resolveBuildSetting } from '../src/ios/xcode.ts'
 
 describe('ExportOptions.plist', () => {
   it('is app-store-connect / automatic / export, with extras merged and escaped', () => {
@@ -68,5 +68,14 @@ describe('Xcode accounts', () => {
     assert.deepEqual(parseXcodeAccounts('{"IDE.Prod":["a@b.c"],"IDE.Identifiers.Prod":[{"identifier":"9CFD"}]}'), ['a@b.c', '9CFD'])
     assert.deepEqual(parseXcodeAccounts(undefined), [])
     assert.deepEqual(parseXcodeAccounts('not json'), [])
+  })
+})
+
+describe('flaky archive failure', () => {
+  const noise = 'error: the following command failed with exit code 0 but produced no further output'
+  it('retries only when every error line is the silent "exit code 0" one', () => {
+    assert.equal(flakyArchiveFailure(`In file included from x.m:6:\n${noise}\n${noise}\n** ARCHIVE FAILED **`), true)
+    assert.equal(flakyArchiveFailure(`/a/b.swift:3:1: error: cannot find 'x' in scope\n${noise}`), false)
+    assert.equal(flakyArchiveFailure('** ARCHIVE FAILED **'), false)
   })
 })

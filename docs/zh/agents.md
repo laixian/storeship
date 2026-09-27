@@ -1,6 +1,6 @@
 # 给 agent 用的 storeship
 
-<!-- storeship 0.4.2 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.3 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 这一篇是写给「要把 agent 接到 storeship 上」的人的。agent 本身不需要读它：下面所有东西在运行时都能从 `storeship spec --json`、`storeship state --json` 和任意一条命令的 `error` 对象里拿到。这也正是整个工具遵循的那一条规则——
 
@@ -95,6 +95,7 @@ Apple 的报错指错方向的次数，多到「把它翻译过来」成了这�
 | `RENDER_FAILED` | 1 | now | 无头 Chrome 连试两次都没出图；message 里写着是哪一张，带着它的 stderr |
 | `PENDING` | 4 | after-wait | 东西在，但还没就绪；过一会儿再问答案就不一样了 |
 | `API` | 1 | never | App Store Connect 拒绝了，原因只在 Apple 的报文里 |
+| `ASC_SERVER` | 1 | now | App Store Connect 内置重试之后仍然回 5xx / 429；原样再跑一次通常就过 |
 | `AUTH` | 1 | never | Apple 不认这把密钥 |
 | `KEY_ROLE` | 1 | never | 这把密钥的角色不够调这个接口 |
 | `KEY_MISSING` | 5 | never | .p8 不在该在的位置，而它只能下载一次 |
@@ -136,6 +137,12 @@ $ storeship version cancel --json
 ```
 
 如果发版那一半还是被拒，就拆成两条跑——先 `storeship ship`，再 `storeship release <版本> --no-ship`——构建那一半被拒不会连带把 App Store Connect 那一半也拖死。
+
+### Claude Code 的 auto mode：发版前先切到 accept edits
+
+auto mode 是另一道闸，上面那几条放行规则开不了它。它由一个模型分类器按自己的判断逐条审命令，看起来不可逆或对外的操作都会被拒，比如删截图、上传加提审、一段直接对 App Store Connect 发 DELETE 的脚本。拒过一次之后，相关的命令也容易跟着被拒，连 `storeship shots upload --help` 都过不去。用户在对话里说一句「放行」，它的判断也不会变。（2026-09-28：1.3.3 换截图换到一半就这样卡住了，有两组被删掉一半。）
+
+所以**开始发版前，请用户把会话切到 accept edits 模式（Shift+Tab）**。那个模式下由放行规则决定，规则以外的命令会弹出普通的权限确认，用户点允许就行。如果在 auto mode 下被拒，就停下来请用户切换模式，不要另找办法去做同一件事。
 
 ## Skill
 

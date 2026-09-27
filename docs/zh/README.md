@@ -98,6 +98,8 @@ npx storeship doctor          # 逐项检查，缺什么说怎么补
 npx storeship state           # 发布走到哪了，下一步跑什么
 ```
 
+用 Claude Code 跑发版时，先把会话切到 **accept edits** 模式（Shift+Tab），别用 auto mode。auto mode 的分类器不认那条权限规则，会按自己的判断拒掉删除和提审（见 [agents.md](agents.md)）。
+
 私钥放 Apple 自己的 `altool` 也会去找的位置：
 
 ```

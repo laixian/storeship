@@ -5,7 +5,7 @@ description: Release an iOS app to the App Store with the storeship CLI — buil
 
 # Releasing with storeship
 
-<!-- storeship 0.4.2 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
+<!-- storeship 0.4.3 — generated blocks below are written by `storeship skill sync`; do not edit them by hand -->
 
 You drive `storeship` (run as `npx storeship …`, or `pnpm storeship …` in a pnpm repo).
 
@@ -73,6 +73,8 @@ Every step is idempotent: on failure, read `error.hint`, fix, run the same comma
 
 If the tool prompts for permission on every call, `storeship init` already wrote the allow rules into `.claude/settings.local.json`; if that file was not written, the rules are `Bash(storeship *)`, `Bash(npx storeship *)`, `Bash(pnpm storeship *)`.
 
+**In Claude Code, ask the human to switch to accept edits mode (Shift+Tab) before the release starts, if the session is in auto mode.** The allow rules do not open auto mode. Its classifier judges every command by itself and refuses what reads as irreversible, such as deleting screenshots or uploading and submitting. After one refusal it tends to refuse related commands too, and the human saying "go ahead" in the chat does not change that. If a command is refused in auto mode, stop and ask for the switch; do not find another way to perform the same action.
+
 ## Store metadata
 
 - `storeship listing check` — offline; parse and character limits. Exit 3 means over limit.
@@ -133,6 +135,7 @@ Branch on `error.code`, never on the message — Apple's wording points the wron
 | `RENDER_FAILED` | 1 | now | headless Chrome did not produce a picture, twice; the message names which one and carries its stderr |
 | `PENDING` | 4 | after-wait | it exists but is not ready yet; asking later gives a different answer |
 | `API` | 1 | never | App Store Connect refused, and the reason is only in Apple's message |
+| `ASC_SERVER` | 1 | now | App Store Connect answered 5xx / 429 even after the built-in retries; the same command again usually goes through |
 | `AUTH` | 1 | never | Apple rejected the API key |
 | `KEY_ROLE` | 1 | never | the key's role is too low for this endpoint |
 | `KEY_MISSING` | 5 | never | the .p8 is not where it should be, and it can only be downloaded once |
